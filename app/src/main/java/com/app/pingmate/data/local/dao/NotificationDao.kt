@@ -32,6 +32,9 @@ interface NotificationDao {
     @Query("SELECT * FROM notifications WHERE isFavorite = 1 AND (:pkgName IS NULL OR packageName = :pkgName) ORDER BY timestamp DESC")
     fun getFavoriteNotificationsPaged(pkgName: String?): androidx.paging.PagingSource<Int, NotificationEntity>
 
+    @Query("SELECT * FROM notifications WHERE reminderTime IS NOT NULL ORDER BY reminderTime ASC")
+    fun getNotificationsWithReminder(): Flow<List<NotificationEntity>>
+
     @Query("SELECT * FROM notifications WHERE packageName = :pkgName ORDER BY timestamp DESC")
     fun getNotificationsByApp(pkgName: String): Flow<List<NotificationEntity>>
 

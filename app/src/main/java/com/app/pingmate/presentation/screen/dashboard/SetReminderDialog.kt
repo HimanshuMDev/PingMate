@@ -30,6 +30,10 @@ import com.app.pingmate.data.local.entity.NotificationEntity
 import com.app.pingmate.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDefaults
+import androidx.compose.material3.rememberDatePickerState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,7 +44,15 @@ fun SetReminderDialog(
 ) {
     var note by remember { mutableStateOf("") }
     val context = LocalContext.current
-    
+
+    // Date: default today
+    val todayStart = remember {
+        Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
+    var selectedDateMillis by remember { mutableStateOf(todayStart) }
+
     // Time Selection State
     val calendar = remember { Calendar.getInstance().apply { add(Calendar.MINUTE, 15) } }
     val timePickerState = rememberTimePickerState(
@@ -48,8 +60,9 @@ fun SetReminderDialog(
         initialMinute = calendar.get(Calendar.MINUTE),
         is24Hour = false
     )
-    
+
     var showTimePicker by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -141,16 +154,51 @@ fun SetReminderDialog(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Time Selection UI
+                // Date Selection
                 Text(
-                    "REMIND ME AT",
+                    "DATE",
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     color = NotiBlue,
                     letterSpacing = 1.sp,
                     modifier = Modifier.fillMaxWidth()
                 )
-                
+                Spacer(modifier = Modifier.height(12.dp))
+                Surface(
+                    onClick = { showDatePicker = true },
+                    color = Color(0xFF1E1E2C),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, Color(0xFF2C2C3E)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = SimpleDateFormat("EEE, MMM d, yyyy", Locale.getDefault()).format(Date(selectedDateMillis)),
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Surface(color = NotiBlue.copy(alpha = 0.2f), shape = CircleShape) {
+                            Icon(Icons.Outlined.CalendarMonth, null, tint = NotiBlue, modifier = Modifier.padding(8.dp).size(20.dp))
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Time Selection UI
+                Text(
+                    "TIME",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = NotiBlue,
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.fillMaxWidth()
+                )
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Surface(
@@ -227,15 +275,15 @@ fun SetReminderDialog(
 
                     Button(
                         onClick = {
-                            val resultCal = Calendar.getInstance()
+                            val resultCal = Calendar.getInstance().apply { timeInMillis = selectedDateMillis }
                             resultCal.set(Calendar.HOUR_OF_DAY, timePickerState.hour)
                             resultCal.set(Calendar.MINUTE, timePickerState.minute)
                             resultCal.set(Calendar.SECOND, 0)
-                            
+                            resultCal.set(Calendar.MILLISECOND, 0)
                             if (resultCal.timeInMillis < System.currentTimeMillis()) {
-                                resultCal.add(Calendar.DAY_OF_YEAR, 1)
+                                resultCal.timeInMillis = System.currentTimeMillis()
+                                resultCal.add(Calendar.MINUTE, 1)
                             }
-                            
                             onSave(resultCal.timeInMillis, note)
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = NotiBlue),
@@ -246,6 +294,27 @@ fun SetReminderDialog(
                     }
                 }
             }
+        }
+    }
+
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = selectedDateMillis
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { selectedDateMillis = it }
+                    showDatePicker = false
+                }) { Text("OK", color = NotiBlue, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("Cancel", color = TextMuted) }
+            },
+            colors = DatePickerDefaults.colors(containerColor = Color(0xFF161622))
+        ) {
+            DatePicker(state = datePickerState)
         }
     }
 

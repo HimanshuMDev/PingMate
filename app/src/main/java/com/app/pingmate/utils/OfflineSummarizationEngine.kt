@@ -30,6 +30,20 @@ class OfflineSummarizationEngine(
 
         const val PREFS_NAME = "PingMatePrefs"
         const val KEY_GEMINI_API = "gemini_api_key"
+        /** Apps in this set are excluded from AI context (user chose "don't analyze"). */
+        const val KEY_AI_EXCLUDED_PACKAGES = "ai_excluded_packages"
+
+        fun getAiExcludedPackages(context: Context): Set<String> {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            return prefs.getStringSet(KEY_AI_EXCLUDED_PACKAGES, emptySet()) ?: emptySet()
+        }
+
+        fun setAiExcludedPackages(context: Context, packageNames: Set<String>) {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putStringSet(KEY_AI_EXCLUDED_PACKAGES, packageNames)
+                .apply()
+        }
         // Models that support generateContent on v1beta (generativelanguage.googleapis.com)
         private val GEMINI_MODELS = listOf(
             "gemini-2.0-flash",
@@ -55,12 +69,18 @@ class OfflineSummarizationEngine(
         Log.d(TAG, "========== summarize() started ==========")
         Log.d(TAG, "User prompt: \"$prompt\"")
 
-        val list = notificationDao.getAllNotifications().first()
-        Log.d(TAG, "Notifications loaded: ${list.size} items")
+        val rawList = notificationDao.getAllNotifications().first()
+        val excludedPackages = getAiExcludedPackages(context)
+        val list = rawList.filter { it.packageName !in excludedPackages }
+        Log.d(TAG, "Notifications loaded: ${rawList.size} total, ${list.size} after excluding ${excludedPackages.size} apps from AI")
 
         if (list.isEmpty()) {
-            Log.d(TAG, "No notifications -> returning empty message")
-            return@withContext "You have no notifications yet. Summaries will appear here once you have some messages."
+            Log.d(TAG, "No notifications (or all excluded) -> returning empty message")
+            return@withContext if (rawList.isEmpty()) {
+                "You have no notifications yet. Summaries will appear here once you have some messages."
+            } else {
+                "No notifications are available for AI. You may have excluded all apps from AI analysis in Settings."
+            }
         }
 
         val contextBlock = buildContextFromNotifications(list)

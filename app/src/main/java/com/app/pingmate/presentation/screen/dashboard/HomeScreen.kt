@@ -37,12 +37,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.BlurEffect
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.app.pingmate.data.local.entity.GeneralReminderEntity
 import com.app.pingmate.data.local.entity.NotificationEntity
 import com.app.pingmate.service.PingMateNotificationService
 import com.app.pingmate.ui.theme.*
@@ -62,6 +66,8 @@ fun HomeScreen(
     viewModel: HomeViewModel = viewModel()
 ) {
     val pagingItems = viewModel.pagedNotifications.collectAsLazyPagingItems()
+    val selectedPackageName by viewModel.selectedPackageName.collectAsState()
+    val remindersList by viewModel.remindersList.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -105,7 +111,8 @@ fun HomeScreen(
     }
 
     LaunchedEffect(aiResponse) {
-        if (aiResponse != null && aiResponse != "Analyzing your notifications…" && isVoiceAiOverlayVisible) {
+        val skip = aiResponse == null || aiResponse == "Analyzing your notifications…" || aiResponse == "Setting reminder…"
+        if (!skip && isVoiceAiOverlayVisible) {
             isVoiceAiOverlayVisible = false
             isVoiceAiDialogVisible = true
         }
@@ -134,7 +141,7 @@ fun HomeScreen(
                     val distinctPackageNames by viewModel.distinctPackageNames.collectAsState()
                     val selectedPackageName by viewModel.selectedPackageName.collectAsState()
 
-                    // Favorites First
+                    // Favorites
                     NavigationDrawerItem(
                         label = { Text("Favorites", fontWeight = FontWeight.SemiBold) },
                         selected = selectedPackageName == "FAVORITES",
@@ -146,6 +153,27 @@ fun HomeScreen(
                         colors = NavigationDrawerItemDefaults.colors(
                             selectedContainerColor = NotiBlue.copy(alpha = 0.15f),
                             selectedIconColor = OtpGold,
+                            selectedTextColor = Color.White,
+                            unselectedContainerColor = Color.Transparent,
+                            unselectedIconColor = TextMuted,
+                            unselectedTextColor = TextSecondary
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    // Reminders
+                    NavigationDrawerItem(
+                        label = { Text("Reminders", fontWeight = FontWeight.SemiBold) },
+                        selected = selectedPackageName == "REMINDERS",
+                        onClick = {
+                            viewModel.selectPackage(if (selectedPackageName == "REMINDERS") null else "REMINDERS")
+                            scope.launch { drawerState.close() }
+                        },
+                        icon = { Icon(Icons.Outlined.AccessTime, null) },
+                        colors = NavigationDrawerItemDefaults.colors(
+                            selectedContainerColor = NotiBlue.copy(alpha = 0.15f),
+                            selectedIconColor = NotiBlue,
                             selectedTextColor = Color.White,
                             unselectedContainerColor = Color.Transparent,
                             unselectedIconColor = TextMuted,
@@ -297,74 +325,70 @@ fun HomeScreen(
                     }
                 }
 
-                // ── SLEEK Date Chip Bar ────────────────────────────
-                val selectedDateStartMillis by viewModel.selectedDateStartMillis.collectAsState()
-                val selectedDate = remember(selectedDateStartMillis) {
-                    if (selectedDateStartMillis == null) null else java.util.Date(selectedDateStartMillis!!)
-                }
+                // ── Date Chip Bar (hidden when Reminders tab is selected) ────────────────────
+                if (selectedPackageName != "REMINDERS") {
+                    val selectedDateStartMillis by viewModel.selectedDateStartMillis.collectAsState()
+                    val selectedDate = remember(selectedDateStartMillis) {
+                        if (selectedDateStartMillis == null) null else java.util.Date(selectedDateStartMillis!!)
+                    }
 
-                var showDatePicker by remember { mutableStateOf(false) }
-                if (showDatePicker) {
-                    val datePickerState = rememberDatePickerState()
-                    DatePickerDialog(
-                        onDismissRequest = { showDatePicker = false },
-                        confirmButton = {
-                            TextButton(onClick = {
-                                viewModel.selectDate(datePickerState.selectedDateMillis)
-                                showDatePicker = false
-                            }) { Text("Apply", color = NotiBlue) }
-                        },
-                        colors = DatePickerDefaults.colors(containerColor = Color(0xFF161622))
+                    var showDatePicker by remember { mutableStateOf(false) }
+                    if (showDatePicker) {
+                        val datePickerState = rememberDatePickerState()
+                        DatePickerDialog(
+                            onDismissRequest = { showDatePicker = false },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    viewModel.selectDate(datePickerState.selectedDateMillis)
+                                    showDatePicker = false
+                                }) { Text("Apply", color = NotiBlue) }
+                            },
+                            colors = DatePickerDefaults.colors(containerColor = Color(0xFF161622))
+                        ) {
+                            DatePicker(state = datePickerState)
+                        }
+                    }
+
+                    LazyRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .padding(vertical = 14.dp),
+                        contentPadding = PaddingValues(horizontal = 0.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        DatePicker(state = datePickerState)
-                    }
-                }
-
-                LazyRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .padding(vertical = 14.dp),
-                    contentPadding = PaddingValues(horizontal = 0.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // All
-                    item {
-                        val sel = selectedDate == null
-                        FilterChipPill(label = "All", selected = sel) { viewModel.selectDate(null) }
-                    }
-                    
-                    // Built-in relative dates
-                    val today = java.util.Calendar.getInstance().apply { set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0) }.time
-                    val dates = (0..6).map { 
-                        java.util.Calendar.getInstance().apply { time = today; add(java.util.Calendar.DAY_OF_YEAR, -it) }.time 
-                    }
-
-                    items(dates) { date ->
-                        val label = when {
-                            isSameDay(date, today) -> "Today"
-                            isSameDay(date, yesterday(today)) -> "Yesterday"
-                            else -> java.text.SimpleDateFormat("dd MMM", java.util.Locale.getDefault()).format(date)
+                        item {
+                            val sel = selectedDate == null
+                            FilterChipPill(label = "All", selected = sel) { viewModel.selectDate(null) }
                         }
-                        val sel = selectedDate != null && isSameDay(date, selectedDate)
-                        FilterChipPill(label = label, selected = sel) {
-                            viewModel.selectDate(if (sel) null else date.time)
+                        val today = java.util.Calendar.getInstance().apply { set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0) }.time
+                        val dates = (0..6).map {
+                            java.util.Calendar.getInstance().apply { time = today; add(java.util.Calendar.DAY_OF_YEAR, -it) }.time
+                        }
+                        items(dates) { date ->
+                            val label = when {
+                                isSameDay(date, today) -> "Today"
+                                isSameDay(date, yesterday(today)) -> "Yesterday"
+                                else -> java.text.SimpleDateFormat("dd MMM", java.util.Locale.getDefault()).format(date)
+                            }
+                            val sel = selectedDate != null && isSameDay(date, selectedDate)
+                            FilterChipPill(label = label, selected = sel) {
+                                viewModel.selectDate(if (sel) null else date.time)
+                            }
+                        }
+                        item {
+                            FilterChipPill(
+                                label = "Custom",
+                                selected = false,
+                                icon = Icons.Outlined.CalendarMonth,
+                                iconTint = TextSecondary
+                            ) { showDatePicker = true }
                         }
                     }
 
-                    // Custom Date Picker Trigger
-                    item {
-                        FilterChipPill(
-                            label = "Custom", 
-                            selected = false, 
-                            icon = Icons.Outlined.CalendarMonth,
-                            iconTint = TextSecondary
-                        ) { showDatePicker = true }
-                    }
+                    HorizontalDivider(color = Color(0xFF15151F), thickness = 1.dp)
                 }
-
-                HorizontalDivider(color = Color(0xFF15151F), thickness = 1.dp)
             }
         },
         floatingActionButton = {
@@ -454,14 +478,31 @@ fun HomeScreen(
         },
         floatingActionButtonPosition = FabPosition.End
     ) { paddingValues ->
-        Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .then(
+                    if (isVoiceAiOverlayVisible && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                        Modifier.graphicsLayer {
+                            renderEffect = BlurEffect(72f, 72f, TileMode.Clamp)
+                        }
+                    } else Modifier
+                )
+        ) {
+            if (selectedPackageName == "REMINDERS") {
+                RemindersListContent(
+                    remindersList = remindersList,
+                    onClearNotificationReminder = { viewModel.clearNotificationReminder(it) },
+                    onDeleteGeneralReminder = { viewModel.deleteGeneralReminder(it) },
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)
+                )
+            } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 120.dp), // Space for FAB
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Filter removed from scrollable layout
-
                 // Header
                 item {
                     val filteredCount = pagingItems.itemCount
@@ -685,6 +726,7 @@ fun HomeScreen(
                     }
                 }
             }
+            }
         }
         }
     }
@@ -782,16 +824,119 @@ fun HomeScreen(
     if (showReminderConfirmation) {
         AlertDialog(
             onDismissRequest = { showReminderConfirmation = false },
-            title = { Text("Reminder Set", color = Color.White) },
-            text = { Text("Your reminder has been successfully scheduled!", color = Color(0xFFB0B3B8)) },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.AccessTime, null, tint = SuccessGreen, modifier = Modifier.size(24.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text("Reminder set", color = Color.White, fontWeight = FontWeight.SemiBold)
+                }
+            },
+            text = { Text("Your reminder has been successfully scheduled. You'll get a notification at the chosen time.", color = Color(0xFFB0B3B8), fontSize = 14.sp) },
             confirmButton = {
                 TextButton(onClick = { showReminderConfirmation = false }) {
-                    Text("OK", color = Color(0xFF6B9DFE))
+                    Text("OK", color = NotiBlue, fontWeight = FontWeight.SemiBold)
                 }
             },
             containerColor = Color(0xFF1E1F24),
             shape = RoundedCornerShape(16.dp)
         )
+    }
+}
+
+@Composable
+fun RemindersListContent(
+    remindersList: List<ReminderItem>,
+    onClearNotificationReminder: (NotificationEntity) -> Unit,
+    onDeleteGeneralReminder: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val timeFormat = remember { SimpleDateFormat("MMM d, yyyy · h:mm a", Locale.getDefault()) }
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(top = 8.dp, bottom = 120.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Text(
+                text = "REMINDERS",
+                style = PingMateTypography.titleSmall.copy(letterSpacing = 1.5.sp, fontWeight = FontWeight.ExtraBold),
+                color = Color(0xFFE4E6EB)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+        if (remindersList.isEmpty()) {
+            item {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(Icons.Outlined.AccessTime, null, modifier = Modifier.size(48.dp), tint = Color(0xFF3D3E48))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("No reminders", color = Color(0xFF6B6F7A), fontSize = 15.sp)
+                    Text("Set reminders via AI or from a notification card", color = Color(0xFF4A4D56), fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                }
+            }
+        } else {
+            items(remindersList.size) { index ->
+                val item = remindersList[index]
+                when (item) {
+                    is ReminderItem.NotificationReminder -> {
+                        val n = item.notification
+                        val timeStr = n.reminderTime?.let { timeFormat.format(Date(it)) } ?: ""
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = Color(0xFF0E0E12),
+                            shape = RoundedCornerShape(14.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF16161C))
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Outlined.AccessTime, null, tint = NotiBlue, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(n.title.ifBlank { "Notification" }, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFD8D9DC), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(timeStr, fontSize = 12.sp, color = Color(0xFF6B6F7C))
+                                }
+                                IconButton(onClick = { onClearNotificationReminder(n) }) {
+                                    Icon(Icons.Outlined.DeleteOutline, "Remove", tint = Color(0xFFA85A66), modifier = Modifier.size(22.dp))
+                                }
+                            }
+                        }
+                    }
+                    is ReminderItem.GeneralReminder -> {
+                        val e = item.entity
+                        val timeStr = timeFormat.format(Date(e.reminderTimeMillis))
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = Color(0xFF0E0E12),
+                            shape = RoundedCornerShape(14.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF16161C))
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Outlined.AccessTime, null, tint = NotiBlue, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(e.note.ifBlank { "Reminder" }, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Color(0xFFD8D9DC), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Text(timeStr, fontSize = 12.sp, color = Color(0xFF6B6F7C))
+                                }
+                                IconButton(onClick = { onDeleteGeneralReminder(e.id) }) {
+                                    Icon(Icons.Outlined.DeleteOutline, "Remove", tint = Color(0xFFA85A66), modifier = Modifier.size(22.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -843,21 +988,18 @@ fun NotificationCard(
         }
     }
 
-    val cardBg by animateColorAsState(
-        targetValue = if (notification.isFavorite) Color(0xFF1A191E) else Color(0xFF17171C),
-        animationSpec = tween(300), label = "cardBg"
-    )
     val contentMaxLines = if (compact) 2 else 20
     val showBigPictureInCard = !compact && bigPictureBitmap != null
-    val borderColor = if (notification.isFavorite) Color(0xFF3D3540) else Color(0xFF25252E)
+    val isFav = notification.isFavorite
+    // Dark card for premium look; favorite = barely different border
+    val cardBg = Color(0xFF0E0E12)
+    val cardBorder = if (isFav) Color(0xFF22222C) else Color(0xFF16161C)
 
     Surface(
         color = cardBg,
-        shape = RoundedCornerShape(16.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
-        modifier = modifier
-            .fillMaxWidth()
-            .shadow(4.dp, RoundedCornerShape(16.dp), spotColor = Color.Black.copy(alpha = 0.25f)),
+        shape = RoundedCornerShape(14.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, cardBorder),
+        modifier = modifier.fillMaxWidth(),
         shadowElevation = 0.dp,
         tonalElevation = 0.dp,
         onClick = onClick
@@ -867,21 +1009,21 @@ fun NotificationCard(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.Top
         ) {
-            // Avatar: user/contact or app icon from notification (system notification image)
+            // User profile / large icon from system notification (e.g. WhatsApp contact photo)
             Box(modifier = Modifier.size(48.dp)) {
                 Box(
                     modifier = Modifier
-                        .size(46.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF1E1E26))
-                        .border(1.dp, Color(0xFF2A2A34), CircleShape)
-                        .align(Alignment.TopStart),
+                        .background(Color(0xFF121218))
+                        .border(1.dp, Color(0xFF1E1E26), CircleShape)
+                        .align(Alignment.Center),
                     contentAlignment = Alignment.Center
                 ) {
                     if (largeIconBitmap != null) {
                         Image(
                             bitmap = largeIconBitmap,
-                            contentDescription = null,
+                            contentDescription = "Sender",
                             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                             modifier = Modifier.fillMaxSize().clip(CircleShape)
                         )
@@ -889,10 +1031,10 @@ fun NotificationCard(
                         androidx.compose.foundation.Image(
                             painter = com.google.accompanist.drawablepainter.rememberDrawablePainter(appIcon),
                             contentDescription = null,
-                            modifier = Modifier.size(26.dp).clip(CircleShape)
+                            modifier = Modifier.size(28.dp).clip(CircleShape)
                         )
                     } else {
-                        Icon(Icons.Default.Notifications, null, tint = Color(0xFF5A5D66), modifier = Modifier.size(22.dp))
+                        Icon(Icons.Default.Notifications, null, tint = Color(0xFF5A5D68), modifier = Modifier.size(22.dp))
                     }
                 }
                 if (largeIconBitmap != null && appIcon != null) {
@@ -900,15 +1042,15 @@ fun NotificationCard(
                         modifier = Modifier
                             .size(18.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF17171C))
-                            .border(1.dp, Color(0xFF25252E), CircleShape)
+                            .background(Color(0xFF0E0E12))
+                            .border(1.dp, Color(0xFF1E1E26), CircleShape)
                             .align(Alignment.BottomEnd),
                         contentAlignment = Alignment.Center
                     ) {
                         androidx.compose.foundation.Image(
                             painter = com.google.accompanist.drawablepainter.rememberDrawablePainter(appIcon),
                             contentDescription = null,
-                            modifier = Modifier.size(12.dp)
+                            modifier = Modifier.size(11.dp)
                         )
                     }
                 }
@@ -925,11 +1067,11 @@ fun NotificationCard(
                         text = appLabel,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
-                        color = Color(0xFF7A7E8E),
+                        color = Color(0xFF6B6F7C),
                         maxLines = 1,
                         modifier = Modifier.weight(1f)
                     )
-                    Text(formattedTime, fontSize = 10.sp, color = Color(0xFF5A5D66), fontWeight = FontWeight.Normal)
+                    Text(formattedTime, fontSize = 10.sp, color = Color(0xFF50535E), fontWeight = FontWeight.Normal)
                 }
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -939,7 +1081,7 @@ fun NotificationCard(
                         text = notification.title,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 13.sp,
-                        color = Color(0xFFE8E9EC),
+                        color = Color(0xFFD8D9DC),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         lineHeight = 18.sp
@@ -949,7 +1091,7 @@ fun NotificationCard(
                 Text(
                     text = notification.content,
                     fontSize = 12.sp,
-                    color = Color(0xFFA8ABB4),
+                    color = Color(0xFF9A9DA8),
                     lineHeight = 18.sp,
                     maxLines = contentMaxLines,
                     overflow = TextOverflow.Ellipsis
@@ -958,11 +1100,10 @@ fun NotificationCard(
                 Spacer(modifier = Modifier.height(if (compact) 8.dp else 10.dp))
 
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    val isFav = notification.isFavorite
                     Surface(
-                        color = if (isFav) Color(0xFF2A2628) else Color(0xFF1E1E26),
+                        color = Color(0xFF16161C),
                         shape = RoundedCornerShape(10.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, if (isFav) Color(0xFF4A4548) else Color(0xFF2A2A34)),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF22222E)),
                         modifier = Modifier.clickable { onFavoriteToggle() }
                     ) {
                         Row(
@@ -973,21 +1114,21 @@ fun NotificationCard(
                             Icon(
                                 imageVector = if (isFav) Icons.Filled.Star else Icons.Outlined.StarBorder,
                                 contentDescription = null,
-                                tint = if (isFav) Color(0xFFC9A227) else Color(0xFF6B6F7A),
+                                tint = if (isFav) Color(0xFF9A8F6E) else Color(0xFF6B6F7C),
                                 modifier = Modifier.size(12.dp)
                             )
                             Text(
                                 text = if (isFav) "Saved" else "Save",
                                 fontSize = 11.sp,
-                                color = if (isFav) Color(0xFFC9A227) else Color(0xFF6B6F7A),
+                                color = if (isFav) Color(0xFF9A8F6E) else Color(0xFF6B6F7C),
                                 fontWeight = FontWeight.Medium
                             )
                         }
                     }
                     Surface(
-                        color = Color(0xFF1E1E26),
+                        color = Color(0xFF16161C),
                         shape = RoundedCornerShape(10.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2A2A34)),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF22222E)),
                         modifier = Modifier.clickable { onRemind() }
                     ) {
                         Row(
@@ -995,15 +1136,14 @@ fun NotificationCard(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Icon(Icons.Outlined.AccessTime, null, tint = Color(0xFF7A7E8E), modifier = Modifier.size(12.dp))
-                            Text("Remind", fontSize = 11.sp, color = Color(0xFF7A7E8E), fontWeight = FontWeight.Medium)
+                            Icon(Icons.Outlined.AccessTime, null, tint = Color(0xFF6B6F7C), modifier = Modifier.size(12.dp))
+                            Text("Remind", fontSize = 11.sp, color = Color(0xFF6B6F7C), fontWeight = FontWeight.Medium)
                         }
                     }
                 }
             }
         }
 
-            // Big picture only in detail view; in list (compact) hide to keep height down
             if (showBigPictureInCard) {
                 Spacer(modifier = Modifier.height(6.dp))
                 Box(
@@ -1020,7 +1160,7 @@ fun NotificationCard(
                             .fillMaxWidth()
                             .heightIn(max = 200.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF0A0A12))
+                            .background(Color(0xFF121218))
                     )
                 }
             }
@@ -1094,14 +1234,14 @@ fun NotificationDetailSheetContent(
                     modifier = Modifier
                         .size(44.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF1E1E26))
-                        .border(1.dp, Color(0xFF2A2A34), CircleShape),
+                        .background(Color(0xFF121218))
+                        .border(1.dp, Color(0xFF1E1E26), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     if (largeIconBitmap != null) {
                         Image(
                             bitmap = largeIconBitmap,
-                            contentDescription = null,
+                            contentDescription = "Sender",
                             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                             modifier = Modifier.fillMaxSize().clip(CircleShape)
                         )
@@ -1112,17 +1252,17 @@ fun NotificationDetailSheetContent(
                             modifier = Modifier.size(26.dp)
                         )
                     } else {
-                        Icon(Icons.Default.Notifications, null, tint = Color(0xFF5A5D66), modifier = Modifier.size(24.dp))
+                        Icon(Icons.Default.Notifications, null, tint = Color(0xFF5A5D68), modifier = Modifier.size(24.dp))
                     }
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
-                    Text(appLabel, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Color(0xFF7A7E8E))
-                    Text(formattedTime, fontSize = 11.sp, color = Color(0xFF5A5D66))
+                    Text(appLabel, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Color(0xFF6B6F7C))
+                    Text(formattedTime, fontSize = 11.sp, color = Color(0xFF50535E))
                 }
             }
             IconButton(onClick = onDismiss) {
-                Icon(Icons.Default.Close, null, tint = Color(0xFF6B6F7A), modifier = Modifier.size(22.dp))
+                Icon(Icons.Default.Close, null, tint = Color(0xFF6B6F7C), modifier = Modifier.size(22.dp))
             }
         }
 
@@ -1133,7 +1273,7 @@ fun NotificationDetailSheetContent(
                 text = notification.title,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = Color(0xFFE8E9EC),
+                color = Color(0xFFD8D9DC),
                 lineHeight = 22.sp
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -1142,7 +1282,7 @@ fun NotificationDetailSheetContent(
         Text(
             text = notification.content,
             fontSize = 14.sp,
-            color = Color(0xFFB0B3B8),
+            color = Color(0xFF9A9DA8),
             lineHeight = 22.sp
         )
 
@@ -1156,15 +1296,12 @@ fun NotificationDetailSheetContent(
                     .fillMaxWidth()
                     .heightIn(max = 260.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF141418))
+                    .background(Color(0xFF121218))
             )
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Actions: Open, Copy, Favorite, Remind, Delete — subtle styling
-        val mutedBorder = Color(0xFF2A2A34)
-        val mutedText = Color(0xFF8A8E9A)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1173,58 +1310,58 @@ fun NotificationDetailSheetContent(
                 onClick = onOpen,
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(12.dp),
-                color = Color(0xFF252530),
-                border = androidx.compose.foundation.BorderStroke(1.dp, mutedBorder)
+                color = Color(0xFF16161C),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF22222E))
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
-                    Icon(Icons.Default.OpenInNew, null, modifier = Modifier.size(16.dp), tint = Color(0xFFA8ABB4))
+                    Icon(Icons.Default.OpenInNew, null, modifier = Modifier.size(16.dp), tint = Color(0xFF9A9DA8))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Open", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color(0xFFE0E2E6))
+                    Text("Open", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color(0xFFD8D9DC))
                 }
             }
             Surface(
                 onClick = onCopy,
                 shape = RoundedCornerShape(12.dp),
-                color = Color(0xFF252530),
-                border = androidx.compose.foundation.BorderStroke(1.dp, mutedBorder)
+                color = Color(0xFF16161C),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF22222E))
             ) {
                 Box(modifier = Modifier.padding(10.dp), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(20.dp), tint = mutedText)
+                    Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(20.dp), tint = Color(0xFF6B6F7C))
                 }
             }
             Surface(
                 onClick = onSave,
                 shape = RoundedCornerShape(12.dp),
-                color = Color(0xFF252530),
-                border = androidx.compose.foundation.BorderStroke(1.dp, mutedBorder)
+                color = Color(0xFF16161C),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF22222E))
             ) {
                 Box(modifier = Modifier.padding(10.dp), contentAlignment = Alignment.Center) {
                     Icon(
                         if (notification.isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
                         null,
                         modifier = Modifier.size(20.dp),
-                        tint = if (notification.isFavorite) Color(0xFFC9A227) else mutedText
+                        tint = if (notification.isFavorite) Color(0xFF9A8F6E) else Color(0xFF6B6F7C)
                     )
                 }
             }
             Surface(
                 onClick = onRemind,
                 shape = RoundedCornerShape(12.dp),
-                color = Color(0xFF252530),
-                border = androidx.compose.foundation.BorderStroke(1.dp, mutedBorder)
+                color = Color(0xFF16161C),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF22222E))
             ) {
                 Box(modifier = Modifier.padding(10.dp), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Outlined.AccessTime, null, modifier = Modifier.size(20.dp), tint = mutedText)
+                    Icon(Icons.Outlined.AccessTime, null, modifier = Modifier.size(20.dp), tint = Color(0xFF6B6F7C))
                 }
             }
             Surface(
                 onClick = onDelete,
                 shape = RoundedCornerShape(12.dp),
-                color = Color(0xFF252530),
+                color = Color(0xFF16161C),
                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF3A3035))
             ) {
                 Box(modifier = Modifier.padding(10.dp), contentAlignment = Alignment.Center) {
@@ -1437,11 +1574,11 @@ fun VoiceAiFullscreenOverlay(
         label = "glow"
     )
 
-    // Dark, near-opaque background so the Lottie animation and transcription stand out clearly
+    // Dark overlay so blurred content behind reads clearly; stronger blur in parent
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF050508))
+            .background(Color.Black.copy(alpha = 0.52f))
             .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { onDismiss() }
     ) {
         Column(
@@ -1449,23 +1586,20 @@ fun VoiceAiFullscreenOverlay(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Large Lottie Animation with Pulsing Glow
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier.size(320.dp)
+                modifier = Modifier.size(280.dp)
             ) {
-                // Background Glow Ring
                 Box(
                     modifier = Modifier
-                        .fillMaxSize(0.8f)
+                        .fillMaxSize(0.85f)
                         .background(
                             Brush.radialGradient(
-                                listOf(VipPurple.copy(alpha = glowAlpha), Color.Transparent)
+                                listOf(Color(0xFF6B7FE8).copy(alpha = glowAlpha * 0.6f), Color.Transparent)
                             ),
                             CircleShape
                         )
                 )
-
                 val composition by com.airbnb.lottie.compose.rememberLottieComposition(
                     com.airbnb.lottie.compose.LottieCompositionSpec.RawRes(com.app.pingmate.R.raw.ai_animation)
                 )
@@ -1480,58 +1614,79 @@ fun VoiceAiFullscreenOverlay(
                 )
             }
 
+            Spacer(modifier = Modifier.height(20.dp))
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Text(
+                "Assistant",
+                color = Color(0xFFE0E2E8),
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold
+            )
 
-            // Transcription Glass Bubble - Now directly under Lottie
-            Box(
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Listening / transcription card
+            Surface(
                 modifier = Modifier
-                    .padding(horizontal = 32.dp)
                     .fillMaxWidth()
+                    .padding(horizontal = 28.dp),
+                shape = RoundedCornerShape(20.dp),
+                color = Color(0xFF1A1B22).copy(alpha = 0.85f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2A2B35))
             ) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth().wrapContentHeight(),
-                    shape = RoundedCornerShape(24.dp),
-                    color = Color.White.copy(alpha = 0.05f),
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp, 
-                        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.1f), Color.Transparent))
-                    )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 20.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier.padding(24.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        AnimatedContent(
-                            targetState = if (isThinking) "thinking" else transcribedText,
-                            transitionSpec = { fadeIn(tween(500)) togetherWith fadeOut(tween(400)) },
-                            label = "overlayTranscription"
-                        ) { text ->
-                            if (text == "thinking") {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.AutoAwesome,
-                                        contentDescription = null,
-                                        tint = NotiBlue,
-                                        modifier = Modifier.size(18.dp)
+                    AnimatedContent(
+                        targetState = if (isThinking) "thinking" else transcribedText,
+                        transitionSpec = { fadeIn(tween(400)) togetherWith fadeOut(tween(300)) },
+                        label = "overlayTranscription"
+                    ) { text ->
+                        when {
+                            text == "thinking" -> {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        color = Color(0xFF7A8AE8),
+                                        strokeWidth = 2.dp
                                     )
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Text(
-                                        "Processing Context...",
-                                        color = Color.White,
-                                        fontSize = 18.sp,
-                                        fontWeight = FontWeight.SemiBold
+                                        "Analyzing…",
+                                        color = Color(0xFFE0E2E8),
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Medium
                                     )
                                 }
-                            } else {
-                                Text(
-                                    text = if (text.isBlank()) "I'm listening..." else text,
-                                    color = if (text.isBlank()) TextMuted else Color.White,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    textAlign = TextAlign.Center,
-                                    lineHeight = 28.sp
-                                )
+                            }
+                            else -> {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.Mic,
+                                        contentDescription = null,
+                                        tint = Color(0xFF7A7E8E),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = if (text.isBlank()) "I'm listening…" else text,
+                                        color = if (text.isBlank()) Color(0xFF9A9EAC) else Color(0xFFE4E6EB),
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Normal,
+                                        lineHeight = 22.sp,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
                             }
                         }
                     }
@@ -1539,17 +1694,16 @@ fun VoiceAiFullscreenOverlay(
             }
         }
 
-        // Close button top right
         IconButton(
             onClick = onDismiss,
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .statusBarsPadding()
-                .padding(20.dp)
+                .padding(16.dp)
                 .size(40.dp)
-                .background(Color.White.copy(alpha = 0.08f), CircleShape)
+                .background(Color(0xFF1E1F28).copy(alpha = 0.9f), CircleShape)
         ) {
-            Icon(Icons.Default.Close, null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+            Icon(Icons.Default.Close, null, tint = Color(0xFF8A8E9A), modifier = Modifier.size(20.dp))
         }
     }
 }

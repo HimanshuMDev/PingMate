@@ -57,12 +57,16 @@
             </intent-filter>
         </service>
 
-        <!-- ===== AI WIDGET ACTIVITY (Transparent overlay) ===== -->
+        <!-- ===== AI WIDGET ACTIVITY (Transparent overlay; not in recents, separate task) ===== -->
         <activity
             android:name=".widget.AiWidgetActivity"
             android:exported="false"
             android:theme="@style/Theme.NotiFlowAI.Transparent"
-            android:windowSoftInputMode="adjustResize" />
+            android:windowSoftInputMode="adjustResize"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:launchMode="singleTask"
+            android:noHistory="true" />
 
         <!-- ===== AI ASSISTANT WIDGET PROVIDER ===== -->
         <receiver

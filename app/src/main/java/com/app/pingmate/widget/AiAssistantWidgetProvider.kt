@@ -20,9 +20,10 @@ class AiAssistantWidgetProvider : AppWidgetProvider() {
         fun updateWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
             val views = RemoteViews(context.packageName, R.layout.widget_ai_assistant)
 
-            // Create an intent that launches the transparent AI Activity
+            // Launch AI overlay in its own task; exclude from recents so closing it doesn't leave app in recents
             val intent = Intent(context, AiWidgetActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS or Intent.FLAG_ACTIVITY_NO_HISTORY)
             }
             val pendingIntent = PendingIntent.getActivity(
                 context, appWidgetId, intent,

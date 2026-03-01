@@ -12,7 +12,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material3.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -20,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -57,7 +60,7 @@ fun VoiceAiDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF050508).copy(alpha = 0.95f))
+                .background(Color.Black.copy(alpha = 0.6f))
                 .clickable(enabled = true, onClick = onDismissRequest),
             contentAlignment = Alignment.Center
         ) {
@@ -66,6 +69,7 @@ fun VoiceAiDialog(
                     .fillMaxWidth(0.9f)
                     .wrapContentHeight()
                     .scale(enterScale.value)
+                    .graphicsLayer { alpha = enterAlpha.value }
                     .clickable(enabled = false) {}, 
                 shape = RoundedCornerShape(32.dp),
                 color = Color(0xFF0A0A12),
@@ -106,8 +110,22 @@ fun VoiceAiDialog(
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
-                        IconButton(onClick = onDismissRequest, modifier = Modifier.size(28.dp)) {
-                            Icon(Icons.Default.Close, null, tint = TextMuted, modifier = Modifier.size(16.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val context = LocalContext.current
+                            IconButton(
+                                onClick = {
+                                    val text = (transcribedText.ifBlank { "Request" } + "\n\n" + (aiResponse ?: "")).trim()
+                                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("PingMate Summary", text))
+                                    android.widget.Toast.makeText(context, "Copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(Icons.Outlined.ContentCopy, contentDescription = "Copy", tint = TextMuted, modifier = Modifier.size(18.dp))
+                            }
+                            IconButton(onClick = onDismissRequest, modifier = Modifier.size(28.dp)) {
+                                Icon(Icons.Default.Close, null, tint = TextMuted, modifier = Modifier.size(16.dp))
+                            }
                         }
                     }
 

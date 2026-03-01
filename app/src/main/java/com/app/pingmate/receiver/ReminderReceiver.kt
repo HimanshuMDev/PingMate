@@ -12,10 +12,19 @@ import com.app.pingmate.MainActivity
 import com.app.pingmate.R
 
 class ReminderReceiver : BroadcastReceiver() {
+    companion object {
+        const val REQUEST_CODE_GENERAL_BASE = 500000
+    }
+
     override fun onReceive(context: Context, intent: Intent) {
+        val isGeneral = intent.hasExtra("EXTRA_GENERAL_REMINDER_ID")
         val title = intent.getStringExtra("EXTRA_TITLE") ?: "PingMate Reminder"
         val message = intent.getStringExtra("EXTRA_MESSAGE") ?: "You have a scheduled reminder"
-        val notificationId = intent.getIntExtra("EXTRA_ID", System.currentTimeMillis().toInt())
+        val notificationId = if (isGeneral) {
+            intent.getIntExtra("EXTRA_GENERAL_REMINDER_ID", System.currentTimeMillis().toInt())
+        } else {
+            intent.getIntExtra("EXTRA_ID", System.currentTimeMillis().toInt())
+        }
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 

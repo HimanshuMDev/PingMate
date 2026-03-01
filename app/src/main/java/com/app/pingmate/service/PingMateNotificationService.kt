@@ -105,20 +105,27 @@ class PingMateNotificationService : NotificationListenerService() {
                 val contentIntent = notification.notification.contentIntent
                 val notificationKey = notification.key
 
-                // Extract contact photo / large icon (e.g. WhatsApp sender avatar)
+                // Extract user profile / large icon (e.g. WhatsApp sender avatar from system notification)
                 val largeIconBase64: String? = try {
-                    val iconBig = extras.getParcelable<android.graphics.Bitmap>(
+                    val notif = notification.notification
+                    @Suppress("DEPRECATION")
+                    var bmp: android.graphics.Bitmap? = extras.getParcelable(
                         android.app.Notification.EXTRA_LARGE_ICON_BIG
-                    ) ?: extras.getParcelable<android.graphics.Bitmap>(
-                        android.app.Notification.EXTRA_LARGE_ICON
-                    )
-                    iconBig?.let { bmp ->
+                    ) ?: extras.getParcelable(android.app.Notification.EXTRA_LARGE_ICON)
+                    if (bmp == null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                        @Suppress("DEPRECATION")
+                        val fromNotif = notif.largeIcon
+                        if (fromNotif is android.graphics.Bitmap) {
+                            bmp = fromNotif
+                        }
+                    }
+                    bmp?.let { bitmap ->
                         val stream = java.io.ByteArrayOutputStream()
-                        bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 80, stream)
-                        android.util.Base64.encodeToString(stream.toByteArray(), android.util.Base64.DEFAULT)
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 85, stream)
+                        android.util.Base64.encodeToString(stream.toByteArray(), android.util.Base64.NO_WRAP)
                     }
                 } catch (e: Exception) {
-                    Log.w("PingMateService", "Could not extract largeIcon: ${e.message}")
+                    Log.w("PingMateService", "Could not extract largeIcon (user profile): ${e.message}")
                     null
                 }
 

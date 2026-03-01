@@ -6,71 +6,124 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.lifecycle.lifecycleScope
+import com.app.pingmate.data.local.PingMateDatabase
+import com.app.pingmate.data.local.entity.GeneralReminderEntity
+import com.app.pingmate.presentation.screen.dashboard.VoiceAiDialog
+import com.app.pingmate.presentation.screen.dashboard.VoiceAiFullscreenOverlay
+import com.app.pingmate.ui.theme.PingMateTheme
+import com.app.pingmate.utils.OfflineSummarizationEngine
+import com.app.pingmate.utils.VoiceAiSoundHelper
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import android.content.Intent
 import android.util.Log
+import java.util.Calendar
 import java.util.Locale
+
+private enum class WidgetPhase { LISTENING, PROCESSING, RESULT }
+
+/** Parse "remind me at 2:30 pm" / "set reminder for 2:30 p.m."; returns (timeMillis, note) or null. */
+private fun parseReminderFromPrompt(prompt: String): Pair<Long, String>? {
+    val lower = prompt.trim().lowercase()
+    if (!lower.contains("remind") && !lower.contains("reminder")) return null
+    val timePattern = Regex("""(?:at|for|@)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?|(\d{1,2}):(\d{2})\s*(am|pm|a\.m\.|p\.m\.)?""", RegexOption.IGNORE_CASE)
+    val match = timePattern.find(lower) ?: return null
+    val (h1, m1, ap1, h2, m2, ap2) = match.destructured
+    val hourStr = h1.ifBlank { h2 }
+    val minStr = (m1.ifBlank { m2 }).ifBlank { "0" }
+    val amPm = ap1.ifBlank { ap2 }.lowercase().trim()
+    var hour = hourStr.toIntOrNull() ?: return null
+    val minute = minStr.toIntOrNull() ?: 0
+    if (amPm.contains("p") && hour in 1..11) hour += 12
+    else if (amPm.contains("a") && hour == 12) hour = 0
+    val cal = Calendar.getInstance(Locale.getDefault())
+    cal.set(Calendar.HOUR_OF_DAY, hour)
+    cal.set(Calendar.MINUTE, minute)
+    cal.set(Calendar.SECOND, 0)
+    cal.set(Calendar.MILLISECOND, 0)
+    if (cal.timeInMillis <= System.currentTimeMillis()) cal.add(Calendar.DAY_OF_MONTH, 1)
+    val note = prompt.replace(Regex("""(?i)(set\s+)?(a\s+)?reminder\s+(for|at)?\s*\d{1,2}(:\d{2})?\s*(am|pm|a\.m\.|p\.m\.)?"""), "").trim().take(200)
+    return Pair(cal.timeInMillis, note)
+}
 
 class AiWidgetActivity : ComponentActivity() {
 
     private var speechRecognizer: SpeechRecognizer? = null
+    private lateinit var summarizationEngine: OfflineSummarizationEngine
+    private var processingJob: kotlinx.coroutines.Job? = null
+
+    private data class WidgetAiState(
+        val phase: WidgetPhase = WidgetPhase.LISTENING,
+        val transcribedText: String = "",
+        val aiResponse: String? = null,
+        val error: String? = null
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Make the activity window transparent
         window.setBackgroundDrawableResource(android.R.color.transparent)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            try {
+                val radiusPx = (48 * resources.displayMetrics.density).toInt().coerceIn(80, 200)
+                window.setBackgroundBlurRadius(radiusPx)
+            } catch (e: Exception) {
+                android.util.Log.w("AiWidgetActivity", "Window blur not available: ${e.message}")
+            }
+        }
+
+        summarizationEngine = OfflineSummarizationEngine(
+            applicationContext,
+            PingMateDatabase.getInstance(applicationContext).notificationDao
+        )
+        val state = mutableStateOf(WidgetAiState())
 
         setContent {
-            AiWidgetOverlay(
-                onDismiss = { finish() },
-                onStartListening = { startSpeechRecognition() },
-                onStopListening = { speechRecognizer?.stopListening() }
-            )
+            PingMateTheme {
+                val currentState = state.value
+                when (currentState.phase) {
+                    WidgetPhase.LISTENING, WidgetPhase.PROCESSING -> {
+                        // Same overlay as in-app: Lottie + listening/transcription card
+                        LaunchedEffect(Unit) {
+                            if (currentState.phase == WidgetPhase.LISTENING) startListening(state)
+                        }
+                        VoiceAiFullscreenOverlay(
+                            transcribedText = currentState.transcribedText,
+                            isThinking = currentState.phase == WidgetPhase.PROCESSING,
+                            onDismiss = { finish() }
+                        )
+                    }
+                    WidgetPhase.RESULT -> {
+                        VoiceAiDialog(
+                            onDismissRequest = { finish() },
+                            transcribedText = currentState.transcribedText,
+                            aiResponse = currentState.aiResponse
+                        )
+                    }
+                }
+            }
         }
     }
 
-    override fun onPause() {
-        super.onPause()
-        // Dismiss if user navigates away
-        finish()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        speechRecognizer?.destroy()
-        speechRecognizer = null
-    }
-
-    private fun startSpeechRecognition() {
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) return
+    private fun startListening(stateHolder: MutableState<WidgetAiState>) {
+        VoiceAiSoundHelper.playListeningStarted(this)
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            stateHolder.value = stateHolder.value.copy(
+                phase = WidgetPhase.RESULT,
+                transcribedText = "",
+                aiResponse = "Speech recognition is not available on this device."
+            )
+            return
+        }
         speechRecognizer?.destroy()
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
         }
         speechRecognizer?.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {}
@@ -80,156 +133,110 @@ class AiWidgetActivity : ComponentActivity() {
             override fun onEndOfSpeech() {}
             override fun onError(error: Int) {
                 Log.e("AiWidgetActivity", "Speech error: $error")
+                runOnUiThread {
+                    if (error != SpeechRecognizer.ERROR_NO_MATCH && error != SpeechRecognizer.ERROR_CLIENT) {
+                        stateHolder.value = stateHolder.value.copy(
+                            phase = WidgetPhase.RESULT,
+                            transcribedText = stateHolder.value.transcribedText,
+                            aiResponse = "Could not hear clearly. Try again."
+                        )
+                    }
+                }
             }
-            override fun onResults(results: Bundle?) {}
-            override fun onPartialResults(partialResults: Bundle?) {}
-            override fun onEvent(eventType: Int, params: Bundle?) {}
-        })
-        speechRecognizer?.startListening(intent)
-    }
-}
-
-@Composable
-private fun AiWidgetOverlay(
-    onDismiss: () -> Unit,
-    onStartListening: () -> Unit,
-    onStopListening: () -> Unit
-) {
-    var isListening by remember { mutableStateOf(false) }
-    var statusText by remember { mutableStateOf("Tap the mic and speak your command") }
-
-    // Pulsing animation for the listening state
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.2f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(700, easing = EaseInOutSine),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseScale"
-    )
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.7f))
-            .clickable(onClick = onDismiss),
-        contentAlignment = Alignment.Center
-    ) {
-        // Prevent click-through to dismiss when tapping the card itself
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.85f)
-                .wrapContentHeight()
-                .clickable(enabled = false, onClick = {}),
-            shape = RoundedCornerShape(28.dp),
-            color = Color(0xFF141518),
-            tonalElevation = 8.dp
-        ) {
-            Column(
-                modifier = Modifier.padding(32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(24.dp)
-            ) {
-                // Header
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "PingMate AI",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp
-                    )
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color(0xFFB0B3B8))
-                    }
-                }
-
-                // Mic button with pulse animation when active
-                Box(contentAlignment = Alignment.Center) {
-                    if (isListening) {
-                        // Outer pulse ring
-                        Box(
-                            modifier = Modifier
-                                .size(96.dp)
-                                .scale(pulseScale)
-                                .background(
-                                    brush = Brush.radialGradient(listOf(Color(0xFF4A84F6).copy(alpha = 0.3f), Color.Transparent)),
-                                    shape = CircleShape
-                                )
+            override fun onResults(results: Bundle?) {
+                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                val text = matches?.firstOrNull()?.trim() ?: ""
+                runOnUiThread {
+                    if (text.isBlank()) {
+                        stateHolder.value = stateHolder.value.copy(
+                            phase = WidgetPhase.RESULT,
+                            aiResponse = "No speech detected. Try again."
                         )
+                        return@runOnUiThread
                     }
-                    Box(
-                        modifier = Modifier
-                            .size(80.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (isListening) Brush.linearGradient(listOf(Color(0xFF4A84F6), Color(0xFF9B59B6)))
-                                else Brush.linearGradient(listOf(Color(0xFF2C2D31), Color(0xFF1E1F24)))
-                            )
-                            .clickable {
-                                isListening = !isListening
-                                if (isListening) {
-                                    statusText = "Listening… speak now"
-                                    onStartListening()
-                                } else {
-                                    statusText = "Tap the mic and speak your command"
-                                    onStopListening()
+                    stateHolder.value = stateHolder.value.copy(
+                        phase = WidgetPhase.PROCESSING,
+                        transcribedText = text
+                    )
+                    VoiceAiSoundHelper.playProcessingStarted(this@AiWidgetActivity)
+                    val reminderParsed = parseReminderFromPrompt(text)
+                    processingJob?.cancel()
+                    processingJob = lifecycleScope.launch(Dispatchers.IO) {
+                        try {
+                            val response = if (reminderParsed != null) {
+                                val (timeMillis, note) = reminderParsed
+                                val db = PingMateDatabase.getInstance(this@AiWidgetActivity)
+                                val entity = GeneralReminderEntity(reminderTimeMillis = timeMillis, note = note)
+                                val id = db.generalReminderDao.insert(entity).toInt()
+                                val alarmManager = getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
+                                val intent = android.content.Intent(this@AiWidgetActivity, com.app.pingmate.receiver.ReminderReceiver::class.java).apply {
+                                    putExtra("EXTRA_TITLE", "PingMate Reminder")
+                                    putExtra("EXTRA_MESSAGE", note.ifBlank { "You have a scheduled reminder" })
+                                    putExtra("EXTRA_GENERAL_REMINDER_ID", id)
                                 }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Mic,
-                            contentDescription = "Microphone",
-                            tint = if (isListening) Color.White else Color(0xFFB0B3B8),
-                            modifier = Modifier.size(36.dp)
-                        )
-                    }
-                }
-
-                // Status text
-                AnimatedContent(targetState = statusText, label = "statusText") { text ->
-                    Text(
-                        text = text,
-                        color = if (isListening) Color(0xFF4A84F6) else Color(0xFFB0B3B8),
-                        fontSize = 14.sp,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                // Suggestion chips
-                if (!isListening) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(
-                            "Summarize today's WhatsApp",
-                            "Show unread messages",
-                            "What's urgent today?"
-                        ).forEach { suggestion ->
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = Color(0xFF1E1F24),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2C2D31)),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { statusText = "\"$suggestion\" — open the app to view results!" }
-                            ) {
-                                Text(
-                                    text = suggestion,
-                                    color = Color(0xFFB0B3B8),
-                                    fontSize = 13.sp,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                                val pendingIntent = android.app.PendingIntent.getBroadcast(
+                                    this@AiWidgetActivity,
+                                    com.app.pingmate.receiver.ReminderReceiver.REQUEST_CODE_GENERAL_BASE + id,
+                                    intent,
+                                    android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+                                )
+                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                                    if (alarmManager.canScheduleExactAlarms()) {
+                                        alarmManager.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, timeMillis, pendingIntent)
+                                    } else {
+                                        alarmManager.setAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, timeMillis, pendingIntent)
+                                    }
+                                } else {
+                                    alarmManager.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, timeMillis, pendingIntent)
+                                }
+                                val timeStr = java.text.SimpleDateFormat("h:mm a", Locale.getDefault()).format(java.util.Date(timeMillis))
+                                "Reminder set for $timeStr. I'll remind you then."
+                            } else {
+                                summarizationEngine.summarize(text)
+                            }
+                            withContext(Dispatchers.Main) {
+                                stateHolder.value = stateHolder.value.copy(
+                                    phase = WidgetPhase.RESULT,
+                                    aiResponse = response
+                                )
+                            }
+                        } catch (e: Exception) {
+                            Log.e("AiWidgetActivity", "Summarize failed", e)
+                            withContext(Dispatchers.Main) {
+                                stateHolder.value = stateHolder.value.copy(
+                                    phase = WidgetPhase.RESULT,
+                                    aiResponse = "Something went wrong: ${e.message}"
                                 )
                             }
                         }
                     }
                 }
             }
-        }
+            override fun onPartialResults(partialResults: Bundle?) {
+                val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                val text = matches?.firstOrNull()?.trim() ?: ""
+                if (text.isNotBlank()) {
+                    runOnUiThread {
+                        stateHolder.value = stateHolder.value.copy(transcribedText = text)
+                    }
+                }
+            }
+            override fun onEvent(eventType: Int, params: Bundle?) {}
+        })
+        speechRecognizer?.startListening(intent)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        speechRecognizer?.stopListening()
+        finish()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        processingJob?.cancel()
+        processingJob = null
+        speechRecognizer?.destroy()
+        speechRecognizer = null
     }
 }

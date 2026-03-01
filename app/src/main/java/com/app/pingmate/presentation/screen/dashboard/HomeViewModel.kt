@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.app.pingmate.data.local.PingMateDatabase
+import com.app.pingmate.data.local.entity.GeneralReminderEntity
 import com.app.pingmate.data.local.entity.NotificationEntity
 import com.app.pingmate.utils.NotificationIntentCache
 import kotlinx.coroutines.Dispatchers
@@ -12,8 +13,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
@@ -25,10 +29,17 @@ import java.util.Locale
 /** Represents one entry in the date strip: label (e.g. "Today", "Yesterday", "Feb 26") and start-of-day millis. */
 data class DateStripItem(val label: String, val startOfDayMillis: Long)
 
+/** One item in the Reminders list: either a notification with a reminder or a standalone general reminder. */
+sealed class ReminderItem {
+    data class NotificationReminder(val notification: NotificationEntity) : ReminderItem()
+    data class GeneralReminder(val entity: GeneralReminderEntity) : ReminderItem()
+}
+
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val db = PingMateDatabase.getInstance(application)
     private val notificationDao = db.notificationDao
+    private val generalReminderDao = db.generalReminderDao
 
     val speechRecognizerManager = com.app.pingmate.utils.SpeechRecognizerManager(application)
     val transcription: StateFlow<String> = speechRecognizerManager.transcription
@@ -51,6 +62,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val distinctPackageNames: StateFlow<List<String>> = notificationDao.getDistinctPackageNames()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    /** Combined list: notification-based reminders + general (AI) reminders, sorted by time. */
+    val remindersList: StateFlow<List<ReminderItem>> = combine(
+        notificationDao.getNotificationsWithReminder(),
+        generalReminderDao.getAllFlow()
+    ) { notifList, generalList ->
+        val notifItems = notifList.map { ReminderItem.NotificationReminder(it) }
+        val generalItems = generalList.map { ReminderItem.GeneralReminder(it) }
+        (notifItems + generalItems).sortedBy {
+            when (it) {
+                is ReminderItem.NotificationReminder -> it.notification.reminderTime ?: 0L
+                is ReminderItem.GeneralReminder -> it.entity.reminderTimeMillis
+            }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
@@ -71,7 +97,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val pkg = triple.third
         
         val isFavoriteFilter = if (pkg == "FAVORITES") true else null
-        val actualPkgFilter = if (pkg == "FAVORITES" || pkg == "All") null else pkg
+        val actualPkgFilter = if (pkg == "FAVORITES" || pkg == "All" || pkg == "REMINDERS") null else pkg
         
         Pager(
             config = PagingConfig(
@@ -200,23 +226,126 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setGeneralReminder(timeMillis: Long, note: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val entity = GeneralReminderEntity(reminderTimeMillis = timeMillis, note = note)
+            val id = generalReminderDao.insert(entity).toInt()
+            val alarmManager = getApplication<Application>().getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
+            val intent = android.content.Intent(getApplication(), com.app.pingmate.receiver.ReminderReceiver::class.java).apply {
+                putExtra("EXTRA_TITLE", "PingMate Reminder")
+                putExtra("EXTRA_MESSAGE", note.ifBlank { "You have a scheduled reminder" })
+                putExtra("EXTRA_GENERAL_REMINDER_ID", id)
+            }
+            val pendingIntent = android.app.PendingIntent.getBroadcast(
+                getApplication(),
+                com.app.pingmate.receiver.ReminderReceiver.REQUEST_CODE_GENERAL_BASE + id,
+                intent,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+            )
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                if (alarmManager.canScheduleExactAlarms()) {
+                    alarmManager.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, timeMillis, pendingIntent)
+                } else {
+                    alarmManager.setAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, timeMillis, pendingIntent)
+                }
+            } else {
+                alarmManager.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, timeMillis, pendingIntent)
+            }
+            Log.d("PingMateReminder", "Scheduled general reminder id=$id at $timeMillis")
+        }
+    }
+
+    fun clearNotificationReminder(notification: NotificationEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            notificationDao.updateNotification(notification.copy(reminderTime = null, reminderNote = null, reminderTag = null))
+            val alarmManager = getApplication<Application>().getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
+            val intent = android.content.Intent(getApplication(), com.app.pingmate.receiver.ReminderReceiver::class.java)
+            val pendingIntent = android.app.PendingIntent.getBroadcast(
+                getApplication(), notification.id, intent,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+            )
+            alarmManager.cancel(pendingIntent)
+        }
+    }
+
+    fun deleteGeneralReminder(id: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            generalReminderDao.delete(id)
+            val alarmManager = getApplication<Application>().getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
+            val intent = android.content.Intent(getApplication(), com.app.pingmate.receiver.ReminderReceiver::class.java).apply {
+                putExtra("EXTRA_GENERAL_REMINDER_ID", id)
+            }
+            val pendingIntent = android.app.PendingIntent.getBroadcast(
+                getApplication(),
+                com.app.pingmate.receiver.ReminderReceiver.REQUEST_CODE_GENERAL_BASE + id,
+                intent,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+            )
+            alarmManager.cancel(pendingIntent)
+        }
+    }
+
     private val summarizationEngine = com.app.pingmate.utils.OfflineSummarizationEngine(application, notificationDao)
+    private var aiPromptJob: Job? = null
 
     fun startVoiceAi() {
         _aiResponse.value = null
         speechRecognizerManager.clearTranscription()
+        com.app.pingmate.utils.VoiceAiSoundHelper.playListeningStarted(getApplication())
         speechRecognizerManager.startListening()
     }
 
     fun clearAiState() {
+        aiPromptJob?.cancel()
+        aiPromptJob = null
         speechRecognizerManager.clearTranscription()
+        speechRecognizerManager.stopListening()
         _aiResponse.value = null
+    }
+
+    /** Tries to parse "remind me at 2:30 pm" / "set reminder for 2:30 p.m."; returns (timeMillis, note) or null. */
+    private fun parseReminderFromPrompt(prompt: String): Pair<Long, String>? {
+        val lower = prompt.trim().lowercase()
+        if (!lower.contains("remind") && !lower.contains("reminder")) return null
+        val timePattern = Regex("""(?:at|for|@)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?|(\d{1,2}):(\d{2})\s*(am|pm|a\.m\.|p\.m\.)?""", RegexOption.IGNORE_CASE)
+        val match = timePattern.find(lower) ?: return null
+        val (h1, m1, ap1, h2, m2, ap2) = match.destructured
+        val hourStr = h1.ifBlank { h2 }
+        val minStr = (m1.ifBlank { m2 }).ifBlank { "0" }
+        val amPm = ap1.ifBlank { ap2 }.lowercase()
+        var hour = hourStr.toIntOrNull() ?: return null
+        val minute = minStr.toIntOrNull() ?: 0
+        if (amPm.contains("p") && hour in 1..11) hour += 12
+        else if (amPm.contains("a") && hour == 12) hour = 0
+        else if (amPm.isBlank() && hour in 1..11) { /* assume current convention or 24h */ }
+        val cal = Calendar.getInstance(Locale.getDefault())
+        cal.set(Calendar.HOUR_OF_DAY, hour)
+        cal.set(Calendar.MINUTE, minute)
+        cal.set(Calendar.SECOND, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        if (cal.timeInMillis <= System.currentTimeMillis()) cal.add(Calendar.DAY_OF_MONTH, 1)
+        val note = prompt.replace(Regex("""(?i)(set\s+)?(a\s+)?reminder\s+(for|at)?\s*\d{1,2}(:\d{2})?\s*(am|pm|a\.m\.|p\.m\.)?"""), "").trim().take(200)
+        return Pair(cal.timeInMillis, note)
     }
 
     fun processAiPrompt(prompt: String) {
         if (prompt.isBlank()) return
+        val reminderParsed = parseReminderFromPrompt(prompt)
+        if (reminderParsed != null) {
+            val (timeMillis, note) = reminderParsed
+            _aiResponse.value = "Setting reminder…"
+            aiPromptJob?.cancel()
+            aiPromptJob = viewModelScope.launch(Dispatchers.IO) {
+                setGeneralReminder(timeMillis, note)
+                val timeStr = java.text.SimpleDateFormat("h:mm a", Locale.getDefault()).format(java.util.Date(timeMillis))
+                _aiResponse.value = "Reminder set for $timeStr. I'll remind you then."
+            }
+            return
+        }
         _aiResponse.value = "Analyzing your notifications…"
-        viewModelScope.launch(Dispatchers.IO) {
+        com.app.pingmate.utils.VoiceAiSoundHelper.playProcessingStarted(getApplication())
+        aiPromptJob?.cancel()
+        aiPromptJob = viewModelScope.launch(Dispatchers.IO) {
             try {
                 Log.d("PingMateAI", "ViewModel: processAiPrompt started for \"${prompt.take(50)}...\"")
                 val summary = summarizationEngine.summarize(prompt)
@@ -231,6 +360,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     override fun onCleared() {
         super.onCleared()
+        aiPromptJob?.cancel()
+        aiPromptJob = null
         speechRecognizerManager.destroy()
     }
 }

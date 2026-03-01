@@ -45,6 +45,12 @@ fun PingMateNavGraph(navController: NavHostController, startDestination: String)
                 }
             )
         }
+
+        composable(route = Screen.ChooseAppsFromSettings.route) {
+            ChooseAppsScreen(
+                onNavigateNext = { navController.popBackStack() }
+            )
+        }
         
         composable(route = Screen.Home.route) {
             HomeScreen(
@@ -54,7 +60,10 @@ fun PingMateNavGraph(navController: NavHostController, startDestination: String)
         }
 
         composable(route = Screen.Settings.route) {
-            SettingsScreen(onBack = { navController.popBackStack() })
+            SettingsScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToChooseApps = { navController.navigate(Screen.ChooseAppsFromSettings.route) }
+            )
         }
     }
 }
@@ -63,6 +72,7 @@ sealed class Screen(val route: String) {
     object Welcome : Screen("welcome")
     object Permission : Screen("permission")
     object ChooseApps : Screen("choose_apps")
+    object ChooseAppsFromSettings : Screen("choose_apps_from_settings")
     object Home : Screen("home")
     object Settings : Screen("settings")
 }

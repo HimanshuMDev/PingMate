@@ -71,7 +71,9 @@ class ChooseAppsViewModel(application: Application) : AndroidViewModel(applicati
                 )
             }.distinctBy { it.packageName }.sortedBy { it.appName }
 
-            _appsList.value = validApps
+            val prefs = getApplication<Application>().getSharedPreferences("PingMatePrefs", android.content.Context.MODE_PRIVATE)
+            val tracked = prefs.getStringSet("tracked_apps", emptySet()) ?: emptySet()
+            _appsList.value = validApps.map { it.copy(isEnabled = it.packageName in tracked) }
             _isLoading.value = false
         }
     }
