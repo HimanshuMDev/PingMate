@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center"
+    android:orientation="vertical">
+
+    <ImageView
+        android:id="@+id/widget_ai_button"
+        android:layout_width="64dp"
+        android:layout_height="64dp"
+        android:background="@drawable/widget_bg_circle"
+        android:padding="16dp"
+        android:src="@drawable/ic_bolt_widget"
+        android:contentDescription="Open AI Assistant" />
+</LinearLayout>

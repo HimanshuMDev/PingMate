@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">NotiFlow AI</string>
+    <string name="notification_listener_label">NotiFlow Notification Access</string>
+    <string name="app_widget_description">Quick access to PingMate AI Assistant from your home screen</string>
+</resources>
