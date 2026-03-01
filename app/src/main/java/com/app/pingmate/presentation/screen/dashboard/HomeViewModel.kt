@@ -74,7 +74,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val actualPkgFilter = if (pkg == "FAVORITES" || pkg == "All") null else pkg
         
         Pager(
-            config = PagingConfig(pageSize = 20, enablePlaceholders = false)
+            config = PagingConfig(
+                pageSize = 20,
+                initialLoadSize = 20,
+                prefetchDistance = 8,
+                enablePlaceholders = false
+            )
         ) {
             if (query.isNotBlank()) {
                 notificationDao.searchNotificationsPaged(query, actualPkgFilter, isFavoriteFilter)

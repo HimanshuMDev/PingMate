@@ -18,5 +18,7 @@ data class NotificationEntity(
     /** System notification key for intent resolution from active notifications. */
     val notificationKey: String? = null,
     /** Base64-encoded PNG of the notification largeIcon (e.g. WhatsApp contact photo). Nullable. */
-    val largeIconBase64: String? = null
+    val largeIconBase64: String? = null,
+    /** Base64-encoded PNG of the notification big picture (e.g. BigPictureStyle image). Nullable. */
+    val bigPictureBase64: String? = null
 )

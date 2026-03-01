@@ -57,7 +57,7 @@ fun VoiceAiDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.7f))
+                .background(Color(0xFF050508).copy(alpha = 0.95f))
                 .clickable(enabled = true, onClick = onDismissRequest),
             contentAlignment = Alignment.Center
         ) {

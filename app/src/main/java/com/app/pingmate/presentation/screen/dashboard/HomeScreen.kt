@@ -8,6 +8,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -70,6 +71,8 @@ fun HomeScreen(
     var isVoiceAiDialogVisible by remember { mutableStateOf(false) }
     var showReminderFor by remember { mutableStateOf<NotificationEntity?>(null) }
     var showReminderConfirmation by remember { mutableStateOf(false) }
+    var detailNotification by remember { mutableStateOf<NotificationEntity?>(null) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val transcribedText by viewModel.transcription.collectAsState()
     val aiResponse by viewModel.aiResponse.collectAsState()
@@ -199,15 +202,12 @@ fun HomeScreen(
                                 icon = {
                                     if (appIcon != null) {
                                         androidx.compose.foundation.Image(
-                                            painter = androidx.compose.ui.graphics.painter.ColorPainter(Color.Transparent), // Placeholder for actual icon mapping if needed
+                                            painter = com.google.accompanist.drawablepainter.rememberDrawablePainter(appIcon),
                                             contentDescription = null,
-                                            modifier = Modifier.size(24.dp)
+                                            modifier = Modifier.size(28.dp)
                                         )
-                                        // Dynamic icons in drawer items in Compose can be tricky without Coil/Glide, 
-                                        // using a generic placeholder if drawable conversion is complex here.
-                                        Icon(Icons.Outlined.Label, null, modifier = Modifier.size(20.dp))
                                     } else {
-                                        Icon(Icons.Outlined.Label, null, modifier = Modifier.size(20.dp))
+                                        Icon(Icons.Outlined.Label, null, modifier = Modifier.size(24.dp), tint = TextMuted)
                                     }
                                 },
                                 colors = NavigationDrawerItemDefaults.colors(
@@ -321,9 +321,12 @@ fun HomeScreen(
                 }
 
                 LazyRow(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(vertical = 14.dp),
+                    contentPadding = PaddingValues(horizontal = 0.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // All
@@ -488,24 +491,55 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                 }
 
-                if (pagingItems.itemCount == 0 && pagingItems.loadState.refresh !is androidx.paging.LoadState.Loading) {
-                    item {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(top = 40.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            HorizontalDivider(color = Color(0xFF2C2D31), thickness = 2.dp, modifier = Modifier.width(40.dp).clip(RoundedCornerShape(2.dp)))
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = "ALL CAUGHT UP FOR NOW",
-                                color = Color(0xFF5A5D66),
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp,
-                                letterSpacing = 1.sp
-                            )
+                when {
+                    pagingItems.loadState.refresh is androidx.paging.LoadState.Loading && pagingItems.itemCount == 0 -> {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(48.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    CircularProgressIndicator(color = NotiBlue, strokeWidth = 2.dp)
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Text("Loading…", color = TextMuted, fontSize = 13.sp)
+                                }
+                            }
                         }
                     }
-                } else {
+                    pagingItems.itemCount == 0 && pagingItems.loadState.refresh !is androidx.paging.LoadState.Loading -> {
+                        item {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 24.dp)
+                                    .padding(top = 48.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    Icons.Outlined.NotificationsNone,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(48.dp),
+                                    tint = Color(0xFF3D3E48)
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = "No notifications found",
+                                    color = Color(0xFF6B6F7A),
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = "Notifications from your selected apps will appear here",
+                                    color = Color(0xFF4A4D56),
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.padding(top = 6.dp)
+                                )
+                            }
+                        }
+                    }
+                    else -> {
                     items(
                         count = pagingItems.itemCount,
                         key = pagingItems.itemKey { it.id }
@@ -565,24 +599,8 @@ fun HomeScreen(
                                 NotificationCard(
                                     notification = notification,
                                     modifier = Modifier,
-                                    onClick = {
-                                        var contentIntent = NotificationIntentCache.get(notification.id)
-                                        
-                                        if (contentIntent == null && !notification.notificationKey.isNullOrBlank()) {
-                                            PingMateNotificationService.resolveIntentFromActiveNotifications(notification.id, notification.notificationKey)
-                                            contentIntent = NotificationIntentCache.get(notification.id)
-                                        }
-                                        
-                                        if (contentIntent != null) {
-                                            try {
-                                                contentIntent.send()
-                                            } catch (e: Exception) {
-                                                context.packageManager.getLaunchIntentForPackage(notification.packageName)?.let { context.startActivity(it) }
-                                            }
-                                        } else {
-                                            context.packageManager.getLaunchIntentForPackage(notification.packageName)?.let { context.startActivity(it) }
-                                        }
-                                    },
+                                    compact = true,
+                                    onClick = { detailNotification = notification },
                                     onFavoriteToggle = { viewModel.toggleFavorite(notification) },
                                     onDelete = { viewModel.deleteNotification(notification) },
                                     onRemind = {
@@ -601,25 +619,128 @@ fun HomeScreen(
                         }
                     }
 
-                    item {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 40.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            HorizontalDivider(color = Color(0xFF2C2D31), thickness = 3.dp, modifier = Modifier.width(40.dp).clip(RoundedCornerShape(2.dp)))
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = "ALL CAUGHT UP FOR NOW",
-                                color = Color(0xFF5A5D66),
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp,
-                                letterSpacing = 1.sp
-                            )
+                    // Paging footer: loading more, retry on error, or end marker
+                    val appendState = pagingItems.loadState.append
+                    item(key = "paging_footer") {
+                        when (appendState) {
+                            is androidx.paging.LoadState.Loading -> {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(24.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(20.dp),
+                                            color = NotiBlue,
+                                            strokeWidth = 2.dp
+                                        )
+                                        Text(
+                                            text = "Loading more…",
+                                            color = TextMuted,
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                }
+                            }
+                            is androidx.paging.LoadState.Error -> {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(20.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = "Couldn't load more",
+                                        color = TextMuted,
+                                        fontSize = 12.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    TextButton(onClick = { pagingItems.retry() }) {
+                                        Text("Retry", color = NotiBlue, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+                            }
+                            else -> {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 16.dp, bottom = 32.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = "You're all caught up",
+                                        color = Color(0xFF5A5D66),
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
                         }
+                    }
                     }
                 }
             }
         }
+        }
+    }
+
+    // Detail bottom sheet: full content + quick actions when user taps a card
+    detailNotification?.let { notification ->
+        ModalBottomSheet(
+            onDismissRequest = { detailNotification = null },
+            sheetState = sheetState,
+            containerColor = Color(0xFF0E0E16),
+            dragHandle = { BottomSheetDefaults.DragHandle() },
+            scrimColor = Color.Black.copy(alpha = 0.72f)
+        ) {
+            NotificationDetailSheetContent(
+                notification = notification,
+                onOpen = {
+                    var contentIntent = NotificationIntentCache.get(notification.id)
+                    if (contentIntent == null && !notification.notificationKey.isNullOrBlank()) {
+                        PingMateNotificationService.resolveIntentFromActiveNotifications(notification.id, notification.notificationKey)
+                        contentIntent = NotificationIntentCache.get(notification.id)
+                    }
+                    if (contentIntent != null) {
+                        try { contentIntent.send() } catch (e: Exception) {
+                            context.packageManager.getLaunchIntentForPackage(notification.packageName)?.let { context.startActivity(it) }
+                        }
+                    } else {
+                        context.packageManager.getLaunchIntentForPackage(notification.packageName)?.let { context.startActivity(it) }
+                    }
+                    detailNotification = null
+                },
+                onCopy = {
+                    val text = buildString {
+                        if (notification.title.isNotBlank()) append(notification.title).append("\n\n")
+                        append(notification.content)
+                    }
+                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Notification", text))
+                    android.widget.Toast.makeText(context, "Copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
+                },
+                onSave = { viewModel.toggleFavorite(notification) },
+                onRemind = {
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                        if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                            showReminderFor = notification
+                            detailNotification = null
+                        } else {
+                            notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    } else {
+                        showReminderFor = notification
+                        detailNotification = null
+                    }
+                },
+                onDelete = { viewModel.deleteNotification(notification); detailNotification = null },
+                onDismiss = { detailNotification = null }
+            )
         }
     }
 
@@ -679,6 +800,7 @@ fun HomeScreen(
 fun NotificationCard(
     notification: NotificationEntity,
     modifier: Modifier = Modifier,
+    compact: Boolean = true,
     onClick: () -> Unit,
     onFavoriteToggle: () -> Unit,
     onDelete: () -> Unit,
@@ -691,6 +813,16 @@ fun NotificationCard(
     // Decode contact/user photo (e.g. WhatsApp sender avatar stored from notification largeIcon)
     val largeIconBitmap = remember(notification.largeIconBase64) {
         notification.largeIconBase64?.let { b64 ->
+            try {
+                val bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
+                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    ?.asImageBitmap()
+            } catch (e: Exception) { null }
+        }
+    }
+    // Decode big picture (e.g. notification content image / BigPictureStyle)
+    val bigPictureBitmap = remember(notification.bigPictureBase64) {
+        notification.bigPictureBase64?.let { b64 ->
             try {
                 val bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
                 android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
@@ -712,35 +844,37 @@ fun NotificationCard(
     }
 
     val cardBg by animateColorAsState(
-        targetValue = if (notification.isFavorite) Color(0xFF130F1A) else Color(0xFF0E0E1A),
+        targetValue = if (notification.isFavorite) Color(0xFF1A191E) else Color(0xFF17171C),
         animationSpec = tween(300), label = "cardBg"
     )
+    val contentMaxLines = if (compact) 2 else 20
+    val showBigPictureInCard = !compact && bigPictureBitmap != null
+    val borderColor = if (notification.isFavorite) Color(0xFF3D3540) else Color(0xFF25252E)
 
     Surface(
         color = cardBg,
         shape = RoundedCornerShape(16.dp),
-        border = androidx.compose.foundation.BorderStroke(
-            width = if (notification.isFavorite) 1.5.dp else 1.dp,
-            brush = if (notification.isFavorite)
-                Brush.horizontalGradient(listOf(OtpGold.copy(alpha = 0.55f), VipPurple.copy(alpha = 0.5f)))
-            else
-                Brush.horizontalGradient(listOf(Color(0xFF1A1A2C), Color(0xFF1A1A2C)))
-        ),
-        modifier = modifier.fillMaxWidth(),
+        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(4.dp, RoundedCornerShape(16.dp), spotColor = Color.Black.copy(alpha = 0.25f)),
+        shadowElevation = 0.dp,
+        tonalElevation = 0.dp,
         onClick = onClick
     ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.Top
         ) {
-            // ── Avatar: contact photo from notification (or app icon) + small app badge ──
-            Box(modifier = Modifier.size(50.dp)) {
-                // Primary circle — shows largeIcon (contact photo) OR app icon
+            // Avatar: user/contact or app icon from notification (system notification image)
+            Box(modifier = Modifier.size(48.dp)) {
                 Box(
                     modifier = Modifier
                         .size(46.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF1A1A2C))
+                        .background(Color(0xFF1E1E26))
+                        .border(1.dp, Color(0xFF2A2A34), CircleShape)
                         .align(Alignment.TopStart),
                     contentAlignment = Alignment.Center
                 ) {
@@ -755,38 +889,34 @@ fun NotificationCard(
                         androidx.compose.foundation.Image(
                             painter = com.google.accompanist.drawablepainter.rememberDrawablePainter(appIcon),
                             contentDescription = null,
-                            modifier = Modifier.size(28.dp).clip(CircleShape)
+                            modifier = Modifier.size(26.dp).clip(CircleShape)
                         )
                     } else {
-                        Icon(Icons.Default.Apps, null, tint = TextMuted, modifier = Modifier.size(22.dp))
+                        Icon(Icons.Default.Notifications, null, tint = Color(0xFF5A5D66), modifier = Modifier.size(22.dp))
                     }
                 }
-
-                // Small app-icon badge in bottom-right corner (only when showing contact photo)
                 if (largeIconBitmap != null && appIcon != null) {
                     Box(
                         modifier = Modifier
-                            .size(20.dp)
+                            .size(18.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF09090F))
-                            .border(1.5.dp, Color(0xFF09090F), CircleShape)
+                            .background(Color(0xFF17171C))
+                            .border(1.dp, Color(0xFF25252E), CircleShape)
                             .align(Alignment.BottomEnd),
                         contentAlignment = Alignment.Center
                     ) {
                         androidx.compose.foundation.Image(
                             painter = com.google.accompanist.drawablepainter.rememberDrawablePainter(appIcon),
                             contentDescription = null,
-                            modifier = Modifier.size(14.dp)
+                            modifier = Modifier.size(12.dp)
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(12.dp))
 
-            // ── Content column ──
             Column(modifier = Modifier.weight(1f)) {
-                // App name + timestamp
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -794,91 +924,311 @@ fun NotificationCard(
                     Text(
                         text = appLabel,
                         fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = NotiBlue,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF7A7E8E),
                         maxLines = 1,
                         modifier = Modifier.weight(1f)
                     )
-                    Text(formattedTime, fontSize = 10.sp, color = TextHint, fontWeight = FontWeight.Medium)
+                    Text(formattedTime, fontSize = 10.sp, color = Color(0xFF5A5D66), fontWeight = FontWeight.Normal)
                 }
 
-                Spacer(modifier = Modifier.height(3.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
-                // Sender / Title
                 if (notification.title.isNotBlank()) {
                     Text(
                         text = notification.title,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.SemiBold,
                         fontSize = 13.sp,
-                        color = Color.White,
+                        color = Color(0xFFE8E9EC),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        lineHeight = 17.sp
+                        lineHeight = 18.sp
                     )
                 }
 
-                // Preview text
                 Text(
                     text = notification.content,
                     fontSize = 12.sp,
-                    color = TextSecondary,
-                    lineHeight = 17.sp,
-                    maxLines = 2,
+                    color = Color(0xFFA8ABB4),
+                    lineHeight = 18.sp,
+                    maxLines = contentMaxLines,
                     overflow = TextOverflow.Ellipsis
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(if (compact) 8.dp else 10.dp))
 
-                // ── ⭐ Save + ⏰ Remind chips ──
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     val isFav = notification.isFavorite
-                    // Star / Save
                     Surface(
-                        color = if (isFav) OtpGold.copy(alpha = 0.12f) else Color(0xFF16161E),
-                        shape = RoundedCornerShape(12.dp),
-                        border = if (isFav) androidx.compose.foundation.BorderStroke(1.dp, OtpGold.copy(alpha = 0.4f)) else null,
+                        color = if (isFav) Color(0xFF2A2628) else Color(0xFF1E1E26),
+                        shape = RoundedCornerShape(10.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, if (isFav) Color(0xFF4A4548) else Color(0xFF2A2A34)),
                         modifier = Modifier.clickable { onFavoriteToggle() }
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            AnimatedContent(
-                                targetState = isFav,
-                                transitionSpec = { scaleIn(spring(Spring.DampingRatioMediumBouncy)) + fadeIn() togetherWith scaleOut() + fadeOut() },
-                                label = "starAnim"
-                            ) { fav ->
-                                Icon(
-                                    imageVector = if (fav) Icons.Filled.Star else Icons.Outlined.StarBorder,
-                                    contentDescription = null,
-                                    tint = if (fav) OtpGold else TextMuted,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                            }
+                            Icon(
+                                imageVector = if (isFav) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                                contentDescription = null,
+                                tint = if (isFav) Color(0xFFC9A227) else Color(0xFF6B6F7A),
+                                modifier = Modifier.size(12.dp)
+                            )
                             Text(
                                 text = if (isFav) "Saved" else "Save",
                                 fontSize = 11.sp,
-                                color = if (isFav) OtpGold else TextMuted,
-                                fontWeight = FontWeight.SemiBold
+                                color = if (isFav) Color(0xFFC9A227) else Color(0xFF6B6F7A),
+                                fontWeight = FontWeight.Medium
                             )
                         }
                     }
-                    // Clock / Remind
                     Surface(
-                        color = NotiBlue.copy(alpha = 0.08f),
-                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFF1E1E26),
+                        shape = RoundedCornerShape(10.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2A2A34)),
                         modifier = Modifier.clickable { onRemind() }
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Icon(Icons.Outlined.AccessTime, null, tint = NotiBlue, modifier = Modifier.size(13.dp))
-                            Text("Remind", fontSize = 11.sp, color = NotiBlue, fontWeight = FontWeight.SemiBold)
+                            Icon(Icons.Outlined.AccessTime, null, tint = Color(0xFF7A7E8E), modifier = Modifier.size(12.dp))
+                            Text("Remind", fontSize = 11.sp, color = Color(0xFF7A7E8E), fontWeight = FontWeight.Medium)
                         }
                     }
+                }
+            }
+        }
+
+            // Big picture only in detail view; in list (compact) hide to keep height down
+            if (showBigPictureInCard) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp)
+                        .padding(bottom = 14.dp)
+                ) {
+                    Image(
+                        bitmap = bigPictureBitmap,
+                        contentDescription = null,
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 200.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF0A0A12))
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notification detail bottom sheet: full content + quick actions
+// ─────────────────────────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NotificationDetailSheetContent(
+    notification: NotificationEntity,
+    onOpen: () -> Unit,
+    onCopy: () -> Unit,
+    onSave: () -> Unit,
+    onRemind: () -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val scrollState = rememberScrollState()
+    val timeFormat = remember { java.text.SimpleDateFormat("h:mm a, MMM d", java.util.Locale.getDefault()) }
+    val formattedTime = timeFormat.format(java.util.Date(notification.timestamp))
+
+    val largeIconBitmap = remember(notification.largeIconBase64) {
+        notification.largeIconBase64?.let { b64 ->
+            try {
+                val bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
+                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+            } catch (e: Exception) { null }
+        }
+    }
+    val bigPictureBitmap = remember(notification.bigPictureBase64) {
+        notification.bigPictureBase64?.let { b64 ->
+            try {
+                val bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
+                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+            } catch (e: Exception) { null }
+        }
+    }
+    val appIcon = remember(notification.packageName) {
+        try { ctx.packageManager.getApplicationIcon(notification.packageName) } catch (e: Exception) { null }
+    }
+    val appLabel = remember(notification.packageName) {
+        try {
+            val ai = ctx.packageManager.getApplicationInfo(notification.packageName, 0)
+            ctx.packageManager.getApplicationLabel(ai).toString()
+        } catch (e: Exception) {
+            notification.packageName.substringAfterLast(".").replaceFirstChar { it.uppercase() }
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .padding(bottom = 32.dp)
+            .verticalScroll(scrollState)
+    ) {
+        // Header: app icon & name + time, close
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF1E1E26))
+                        .border(1.dp, Color(0xFF2A2A34), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (largeIconBitmap != null) {
+                        Image(
+                            bitmap = largeIconBitmap,
+                            contentDescription = null,
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize().clip(CircleShape)
+                        )
+                    } else if (appIcon != null) {
+                        Image(
+                            painter = com.google.accompanist.drawablepainter.rememberDrawablePainter(appIcon),
+                            contentDescription = null,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    } else {
+                        Icon(Icons.Default.Notifications, null, tint = Color(0xFF5A5D66), modifier = Modifier.size(24.dp))
+                    }
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(appLabel, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Color(0xFF7A7E8E))
+                    Text(formattedTime, fontSize = 11.sp, color = Color(0xFF5A5D66))
+                }
+            }
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.Default.Close, null, tint = Color(0xFF6B6F7A), modifier = Modifier.size(22.dp))
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (notification.title.isNotBlank()) {
+            Text(
+                text = notification.title,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFFE8E9EC),
+                lineHeight = 22.sp
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        Text(
+            text = notification.content,
+            fontSize = 14.sp,
+            color = Color(0xFFB0B3B8),
+            lineHeight = 22.sp
+        )
+
+        if (bigPictureBitmap != null) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Image(
+                bitmap = bigPictureBitmap,
+                contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 260.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF141418))
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Actions: Open, Copy, Favorite, Remind, Delete — subtle styling
+        val mutedBorder = Color(0xFF2A2A34)
+        val mutedText = Color(0xFF8A8E9A)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Surface(
+                onClick = onOpen,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFF252530),
+                border = androidx.compose.foundation.BorderStroke(1.dp, mutedBorder)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(Icons.Default.OpenInNew, null, modifier = Modifier.size(16.dp), tint = Color(0xFFA8ABB4))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Open", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color(0xFFE0E2E6))
+                }
+            }
+            Surface(
+                onClick = onCopy,
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFF252530),
+                border = androidx.compose.foundation.BorderStroke(1.dp, mutedBorder)
+            ) {
+                Box(modifier = Modifier.padding(10.dp), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(20.dp), tint = mutedText)
+                }
+            }
+            Surface(
+                onClick = onSave,
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFF252530),
+                border = androidx.compose.foundation.BorderStroke(1.dp, mutedBorder)
+            ) {
+                Box(modifier = Modifier.padding(10.dp), contentAlignment = Alignment.Center) {
+                    Icon(
+                        if (notification.isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                        null,
+                        modifier = Modifier.size(20.dp),
+                        tint = if (notification.isFavorite) Color(0xFFC9A227) else mutedText
+                    )
+                }
+            }
+            Surface(
+                onClick = onRemind,
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFF252530),
+                border = androidx.compose.foundation.BorderStroke(1.dp, mutedBorder)
+            ) {
+                Box(modifier = Modifier.padding(10.dp), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Outlined.AccessTime, null, modifier = Modifier.size(20.dp), tint = mutedText)
+                }
+            }
+            Surface(
+                onClick = onDelete,
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFF252530),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF3A3035))
+            ) {
+                Box(modifier = Modifier.padding(10.dp), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Outlined.DeleteOutline, null, modifier = Modifier.size(20.dp), tint = Color(0xFFA85A66))
                 }
             }
         }
@@ -1087,16 +1437,11 @@ fun VoiceAiFullscreenOverlay(
         label = "glow"
     )
 
+    // Dark, near-opaque background so the Lottie animation and transcription stand out clearly
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(NotiBlue.copy(alpha = 0.15f), Color.Black),
-                    center = androidx.compose.ui.geometry.Offset.Unspecified,
-                    radius = 2000f
-                )
-            )
+            .background(Color(0xFF050508))
             .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { onDismiss() }
     ) {
         Column(

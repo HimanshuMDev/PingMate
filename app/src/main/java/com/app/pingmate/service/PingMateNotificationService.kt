@@ -84,10 +84,16 @@ class PingMateNotificationService : NotificationListenerService() {
                 title = titleBig
             }
 
-            // Extract InboxStyle text lines (grouped messages in a single chat)
-            val textLines = extras.getCharSequenceArray(android.app.Notification.EXTRA_TEXT_LINES)
-            if (textLines != null && textLines.isNotEmpty()) {
-                text = textLines.joinToString("\n")
+            // Prefer EXTRA_BIG_TEXT when present (BigTextStyle) so we store full/large content
+            val bigText = extras.getCharSequence(android.app.Notification.EXTRA_BIG_TEXT)?.toString()
+            if (!bigText.isNullOrBlank()) {
+                text = bigText
+            } else {
+                // Fallback: InboxStyle text lines (grouped messages in a single chat)
+                val textLines = extras.getCharSequenceArray(android.app.Notification.EXTRA_TEXT_LINES)
+                if (textLines != null && textLines.isNotEmpty()) {
+                    text = textLines.joinToString("\n")
+                }
             }
 
             // Check if this package is tracked by the user in SharedPreferences
@@ -116,13 +122,28 @@ class PingMateNotificationService : NotificationListenerService() {
                     null
                 }
 
+                // Extract big picture (e.g. BigPictureStyle / notification content image)
+                val bigPictureBase64: String? = try {
+                    @Suppress("DEPRECATION")
+                    val picture = extras.get(android.app.Notification.EXTRA_PICTURE)
+                    (picture as? android.graphics.Bitmap)?.let { bmp ->
+                        val stream = java.io.ByteArrayOutputStream()
+                        bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 85, stream)
+                        android.util.Base64.encodeToString(stream.toByteArray(), android.util.Base64.DEFAULT)
+                    }
+                } catch (e: Exception) {
+                    Log.w("PingMateService", "Could not extract big picture: ${e.message}")
+                    null
+                }
+
                 serviceScope.launch {
                     val existing = db.notificationDao.getRecentNotification(packageName, title, text)
                     if (existing != null) {
                         val updated = existing.copy(
                             timestamp = postTime,
                             notificationKey = notificationKey,
-                            largeIconBase64 = largeIconBase64 ?: existing.largeIconBase64
+                            largeIconBase64 = largeIconBase64 ?: existing.largeIconBase64,
+                            bigPictureBase64 = bigPictureBase64 ?: existing.bigPictureBase64
                         )
                         db.notificationDao.updateNotification(updated)
                         contentIntent?.let { NotificationIntentCache.put(updated.id, it) }
@@ -134,7 +155,8 @@ class PingMateNotificationService : NotificationListenerService() {
                             timestamp = postTime,
                             isFavorite = false,
                             notificationKey = notificationKey,
-                            largeIconBase64 = largeIconBase64
+                            largeIconBase64 = largeIconBase64,
+                            bigPictureBase64 = bigPictureBase64
                         )
                         val insertedId = db.notificationDao.insertNotification(entity).toInt()
                         contentIntent?.let { NotificationIntentCache.put(insertedId, it) }
