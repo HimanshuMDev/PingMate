@@ -1,7 +1,7 @@
 package com.app.pingmate.presentation.screen.dashboard
 
 import androidx.compose.animation.*
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -27,12 +28,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.*
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -56,21 +61,12 @@ fun HomeScreen(
     viewModel: HomeViewModel = viewModel()
 ) {
     val pagingItems = viewModel.pagedNotifications.collectAsLazyPagingItems()
-    var selectedTab by remember { mutableStateOf("All") }
-    val tabs = listOf("All", "VIP", "Tasks", "Pinned")
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
     var isSearchExpanded by remember { mutableStateOf(false) }
-    var isCalendarVisible by remember { mutableStateOf(false) }
-
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val notificationPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (!isGranted) {
-            android.widget.Toast.makeText(context, "Notification permission is required to receive reminders.", android.widget.Toast.LENGTH_SHORT).show()
-        }
-    }
-
+    var isVoiceAiOverlayVisible by remember { mutableStateOf(false) }
     var isVoiceAiDialogVisible by remember { mutableStateOf(false) }
     var showReminderFor by remember { mutableStateOf<NotificationEntity?>(null) }
     var showReminderConfirmation by remember { mutableStateOf(false) }
@@ -79,10 +75,11 @@ fun HomeScreen(
     val aiResponse by viewModel.aiResponse.collectAsState()
     val isListening by viewModel.isListening.collectAsState()
 
-    // When listening stops, process the prompt if we got one.
-    LaunchedEffect(isListening) {
-        if (!isListening && transcribedText.isNotBlank() && aiResponse == null && isVoiceAiDialogVisible) {
-            viewModel.processAiPrompt(transcribedText)
+    val notificationPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (!isGranted) {
+            android.widget.Toast.makeText(context, "Notification permission is required to receive reminders.", android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -90,295 +87,371 @@ fun HomeScreen(
         contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            isVoiceAiDialogVisible = true
+            isVoiceAiOverlayVisible = true
             viewModel.startVoiceAi()
         } else {
-            // Handle permission denial gracefully
             android.widget.Toast.makeText(context, "Microphone permission is required for Voice AI.", android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
-    if (isVoiceAiDialogVisible) {
-        VoiceAiDialog(
-            onDismissRequest = { 
-                isVoiceAiDialogVisible = false
-                viewModel.clearAiState()
-            },
-            transcribedText = transcribedText,
-            aiResponse = aiResponse
-        )
+    // Logic Effects
+    LaunchedEffect(isListening) {
+        if (!isListening && transcribedText.isNotBlank() && aiResponse == null && isVoiceAiOverlayVisible) {
+            viewModel.processAiPrompt(transcribedText)
+        }
     }
 
-    // Reminder Dialog Rendering
-    showReminderFor?.let { notificationToRemind ->
-        SetReminderDialog(
-            notification = notificationToRemind,
-            onDismiss = { showReminderFor = null },
-            onSave = { timeMillis, note ->
-                viewModel.setReminder(notificationToRemind, timeMillis, note, "")
-                showReminderFor = null
-                showReminderConfirmation = true
-            }
-        )
+    LaunchedEffect(aiResponse) {
+        if (aiResponse != null && aiResponse != "Analyzing your notifications…" && isVoiceAiOverlayVisible) {
+            isVoiceAiOverlayVisible = false
+            isVoiceAiDialogVisible = true
+        }
     }
 
-    if (showReminderConfirmation) {
-        AlertDialog(
-            onDismissRequest = { showReminderConfirmation = false },
-            title = { Text("Reminder Set", color = Color.White) },
-            text = { Text("Your reminder has been successfully scheduled!", color = Color(0xFFB0B3B8)) },
-            confirmButton = {
-                TextButton(onClick = { showReminderConfirmation = false }) {
-                    Text("OK", color = Color(0xFF6B9DFE))
-                }
-            },
-            containerColor = Color(0xFF1E1F24),
-            shape = RoundedCornerShape(16.dp)
-        )
-    }
+    // Main UI with Drawer
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        gesturesEnabled = true,
+        drawerContent = {
+            ModalDrawerSheet(
+                drawerContainerColor = Color(0xFF0F0F18),
+                drawerTonalElevation = 0.dp,
+                modifier = Modifier.fillMaxWidth(0.75f),
+                windowInsets = WindowInsets.statusBars
+            ) {
+                Column(modifier = Modifier.padding(24.dp)) {
+                    Text(
+                        "FILTER BY APP",
+                        style = PingMateTypography.titleSmall.copy(letterSpacing = 2.sp),
+                        color = NotiBlue,
+                        fontWeight = FontWeight.Black
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
 
-    Scaffold(
-        containerColor = Color(0xFF141518), // Dark background matching the image
-        topBar = {
-            Column(modifier = Modifier.background(Color(0xFF141518))) {
-                TopAppBar(
-                    title = {
-                        if (isSearchExpanded) {
-                            val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
-                            
-                            LaunchedEffect(Unit) {
-                                focusRequester.requestFocus()
-                            }
-                            
-                            val searchQuery by viewModel.searchQuery.collectAsState()
-                            
-                            TextField(
-                                value = searchQuery,
-                                onValueChange = { viewModel.updateSearchQuery(it) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(end = 8.dp)
-                                    .focusRequester(focusRequester),
-                                placeholder = { Text("Search notifications...", color = Color(0xFF5A5D66), fontSize = 16.sp) },
-                                colors = TextFieldDefaults.colors(
-                                    focusedContainerColor = Color.Transparent,
-                                    unfocusedContainerColor = Color.Transparent,
-                                    focusedIndicatorColor = Color.Transparent,
-                                    unfocusedIndicatorColor = Color.Transparent,
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White,
-                                    cursorColor = Color(0xFF4A84F6)
+                    val distinctPackageNames by viewModel.distinctPackageNames.collectAsState()
+                    val selectedPackageName by viewModel.selectedPackageName.collectAsState()
+
+                    // Favorites First
+                    NavigationDrawerItem(
+                        label = { Text("Favorites", fontWeight = FontWeight.SemiBold) },
+                        selected = selectedPackageName == "FAVORITES",
+                        onClick = {
+                            viewModel.selectPackage(if (selectedPackageName == "FAVORITES") null else "FAVORITES")
+                            scope.launch { drawerState.close() }
+                        },
+                        icon = { Icon(if (selectedPackageName == "FAVORITES") Icons.Filled.Star else Icons.Outlined.StarBorder, null) },
+                        colors = NavigationDrawerItemDefaults.colors(
+                            selectedContainerColor = NotiBlue.copy(alpha = 0.15f),
+                            selectedIconColor = OtpGold,
+                            selectedTextColor = Color.White,
+                            unselectedContainerColor = Color.Transparent,
+                            unselectedIconColor = TextMuted,
+                            unselectedTextColor = TextSecondary
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    HorizontalDivider(color = Color(0xFF1C1C2C), modifier = Modifier.padding(vertical = 12.dp))
+
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        item {
+                            NavigationDrawerItem(
+                                label = { Text("All Applications", fontWeight = FontWeight.SemiBold) },
+                                selected = selectedPackageName == null,
+                                onClick = {
+                                    viewModel.selectPackage(null)
+                                    scope.launch { drawerState.close() }
+                                },
+                                icon = { Icon(Icons.Outlined.Apps, null) },
+                                colors = NavigationDrawerItemDefaults.colors(
+                                    selectedContainerColor = NotiBlue.copy(alpha = 0.15f),
+                                    selectedIconColor = NotiBlue,
+                                    selectedTextColor = Color.White,
+                                    unselectedContainerColor = Color.Transparent,
+                                    unselectedIconColor = TextMuted,
+                                    unselectedTextColor = TextSecondary
                                 ),
-                                singleLine = true
+                                shape = RoundedCornerShape(16.dp)
                             )
-                        } else {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = Color.White,
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Bolt,
-                                        contentDescription = "Logo",
-                                        tint = Color.Black,
-                                        modifier = Modifier.padding(4.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(
-                                    "NotiFlow AI",
-                                    style = PingMateTypography.titleLarge.copy(fontWeight = FontWeight.ExtraBold, fontSize = 20.sp),
-                                    color = Color.White
-                                )
-                            }
                         }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color(0xFF141518),
-                        titleContentColor = Color.White,
-                        actionIconContentColor = Color(0xFFB0B3B8)
-                    ),
-                    actions = {
-                        if (isSearchExpanded) {
-                            IconButton(onClick = { 
-                                isSearchExpanded = false
-                                viewModel.updateSearchQuery("")
-                            }) {
-                                Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+
+                        items(distinctPackageNames) { pkg ->
+                            val appName = remember(pkg) {
+                                try {
+                                    val pm = context.packageManager
+                                    pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+                                } catch (e: Exception) {
+                                    pkg.substringAfterLast(".").replaceFirstChar { it.uppercase() }
+                                }
                             }
-                        } else {
-                            IconButton(onClick = { isCalendarVisible = !isCalendarVisible }) {
-                                Icon(
-                                    imageVector = if (isCalendarVisible) Icons.Default.Close else Icons.Outlined.CalendarMonth,
-                                    contentDescription = "Toggle Calendar",
-                                    tint = Color.White
-                                )
+                            val appIcon = remember(pkg) {
+                                try { context.packageManager.getApplicationIcon(pkg) } catch (e: Exception) { null }
                             }
-                            IconButton(onClick = { onOpenSettings() }) {
-                                Icon(imageVector = Icons.Outlined.Settings, contentDescription = "Settings", tint = Color.White)
-                            }
-                            IconButton(onClick = { isSearchExpanded = true }) {
-                                Icon(imageVector = Icons.Outlined.Search, contentDescription = "Search", tint = Color.White)
-                            }
+
+                            NavigationDrawerItem(
+                                label = { Text(appName, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                selected = selectedPackageName == pkg,
+                                onClick = {
+                                    viewModel.selectPackage(pkg)
+                                    scope.launch { drawerState.close() }
+                                },
+                                icon = {
+                                    if (appIcon != null) {
+                                        androidx.compose.foundation.Image(
+                                            painter = androidx.compose.ui.graphics.painter.ColorPainter(Color.Transparent), // Placeholder for actual icon mapping if needed
+                                            contentDescription = null,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                        // Dynamic icons in drawer items in Compose can be tricky without Coil/Glide, 
+                                        // using a generic placeholder if drawable conversion is complex here.
+                                        Icon(Icons.Outlined.Label, null, modifier = Modifier.size(20.dp))
+                                    } else {
+                                        Icon(Icons.Outlined.Label, null, modifier = Modifier.size(20.dp))
+                                    }
+                                },
+                                colors = NavigationDrawerItemDefaults.colors(
+                                    selectedContainerColor = NotiBlue.copy(alpha = 0.15f),
+                                    selectedIconColor = NotiBlue,
+                                    selectedTextColor = Color.White,
+                                    unselectedContainerColor = Color.Transparent,
+                                    unselectedIconColor = TextMuted,
+                                    unselectedTextColor = TextSecondary
+                                ),
+                                shape = RoundedCornerShape(16.dp)
+                            )
                         }
                     }
-                )
-                HorizontalDivider(color = Color(0xFF2C2D31), thickness = 1.dp)
+                }
+            }
+        }
+    ) {
+        Scaffold(
+            containerColor = Color(0xFF09090F),
+            topBar = {
+            Column(
+                modifier = Modifier
+                    .background(Color(0xFF09090F))
+                    .statusBarsPadding()
+            ) {
+                // ── Main title bar ──────────────────────────────────
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Logo
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(
+                                Brush.linearGradient(listOf(NotiBlue, VipPurple)),
+                                RoundedCornerShape(11.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Bolt, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    if (isSearchExpanded) {
+                        val focusRequester = remember { FocusRequester() }
+                        LaunchedEffect(Unit) { focusRequester.requestFocus() }
+                        val searchQuery by viewModel.searchQuery.collectAsState()
+                        TextField(
+                            value = searchQuery,
+                            onValueChange = { viewModel.updateSearchQuery(it) },
+                            modifier = Modifier.weight(1f).focusRequester(focusRequester),
+                            placeholder = { Text("Search…", color = TextHint, fontSize = 15.sp) },
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                cursorColor = NotiBlue
+                            ),
+                            singleLine = true
+                        )
+                        IconButton(onClick = { isSearchExpanded = false; viewModel.updateSearchQuery("") }) {
+                            Icon(Icons.Default.Close, null, tint = TextSecondary)
+                        }
+                    } else {
+                        Text(
+                            "PingMate",
+                            fontWeight = FontWeight.Black,
+                            fontSize = 22.sp,
+                            color = Color.White,
+                            letterSpacing = (-0.5).sp,
+                            modifier = Modifier.weight(1f)
+                        )
+                        // Action icons with dark pill backgrounds
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            TopBarIconBtn(icon = Icons.Outlined.FilterList) { 
+                                scope.launch { drawerState.open() }
+                            }
+                            TopBarIconBtn(icon = Icons.Outlined.Search) { isSearchExpanded = true }
+                            TopBarIconBtn(icon = Icons.Outlined.Settings) { onOpenSettings() }
+                        }
+                    }
+                }
 
-                // Calendar Strip (Horizontal Scrollable Date Selector)
+                // ── SLEEK Date Chip Bar ────────────────────────────
                 val selectedDateStartMillis by viewModel.selectedDateStartMillis.collectAsState()
                 val selectedDate = remember(selectedDateStartMillis) {
                     if (selectedDateStartMillis == null) null else java.util.Date(selectedDateStartMillis!!)
                 }
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = isCalendarVisible,
-                    enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
-                    exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
-                ) {
-                    CalendarStrip(
-                        selectedDate = selectedDate,
-                        onDateSelected = { date ->
-                            viewModel.selectDate(date?.time)
-                        }
-                    )
-                }
 
-                // App Filter Strip
-                val distinctPackageNames by viewModel.distinctPackageNames.collectAsState()
-                val selectedPackageName by viewModel.selectedPackageName.collectAsState()
+                var showDatePicker by remember { mutableStateOf(false) }
+                if (showDatePicker) {
+                    val datePickerState = rememberDatePickerState()
+                    DatePickerDialog(
+                        onDismissRequest = { showDatePicker = false },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                viewModel.selectDate(datePickerState.selectedDateMillis)
+                                showDatePicker = false
+                            }) { Text("Apply", color = NotiBlue) }
+                        },
+                        colors = DatePickerDefaults.colors(containerColor = Color(0xFF161622))
+                    ) {
+                        DatePicker(state = datePickerState)
+                    }
+                }
 
                 LazyRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                     contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // All
                     item {
-                        val isAllSelected = selectedPackageName == null
-                        Surface(
-                            color = if (isAllSelected) Color(0xFF2C3246) else Color(0xFF1E1F24),
-                            shape = RoundedCornerShape(20.dp),
-                            border = if (!isAllSelected) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2C2D31)) else null,
-                            modifier = Modifier
-                                .height(32.dp)
-                                .clickable { viewModel.selectPackage(null) }
-                        ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 16.dp)) {
-                                Text(
-                                    text = "All",
-                                    color = if (isAllSelected) Color.White else Color(0xFFB0B3B8),
-                                    fontWeight = if (isAllSelected) FontWeight.Bold else FontWeight.Medium,
-                                    fontSize = 12.sp
-                                )
-                            }
+                        val sel = selectedDate == null
+                        FilterChipPill(label = "All", selected = sel) { viewModel.selectDate(null) }
+                    }
+                    
+                    // Built-in relative dates
+                    val today = java.util.Calendar.getInstance().apply { set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0) }.time
+                    val dates = (0..6).map { 
+                        java.util.Calendar.getInstance().apply { time = today; add(java.util.Calendar.DAY_OF_YEAR, -it) }.time 
+                    }
+
+                    items(dates) { date ->
+                        val label = when {
+                            isSameDay(date, today) -> "Today"
+                            isSameDay(date, yesterday(today)) -> "Yesterday"
+                            else -> java.text.SimpleDateFormat("dd MMM", java.util.Locale.getDefault()).format(date)
+                        }
+                        val sel = selectedDate != null && isSameDay(date, selectedDate)
+                        FilterChipPill(label = label, selected = sel) {
+                            viewModel.selectDate(if (sel) null else date.time)
                         }
                     }
 
+                    // Custom Date Picker Trigger
                     item {
-                        val isFavSelected = selectedPackageName == "FAVORITES"
-                        Surface(
-                            color = if (isFavSelected) Color(0xFF2C3246) else Color(0xFF1E1F24),
-                            shape = RoundedCornerShape(20.dp),
-                            border = if (!isFavSelected) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2C2D31)) else null,
-                            modifier = Modifier
-                                .height(32.dp)
-                                .clickable { viewModel.selectPackage(if (isFavSelected) null else "FAVORITES") }
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 16.dp)
-                            ) {
-                                Icon(Icons.Filled.Star, contentDescription = "Favorites", tint = if (isFavSelected) Color(0xFFFACC15) else Color.White, modifier = Modifier.size(12.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "Favorites",
-                                    color = if (isFavSelected) Color.White else Color(0xFFB0B3B8),
-                                    fontWeight = if (isFavSelected) FontWeight.Bold else FontWeight.Medium,
-                                    fontSize = 12.sp
-                                )
-                            }
-                        }
-                    }
-
-                    items(distinctPackageNames) { pkg ->
-                        val isSelected = selectedPackageName == pkg
-                        // Extract a readable app name from the package name, or just use the last segment.
-                        // For a real app, you'd use PackageManager to get the actual app label.
-                        val appName = remember(pkg) {
-                            try {
-                                val pm = context.packageManager
-                                val appInfo = pm.getApplicationInfo(pkg, 0)
-                                pm.getApplicationLabel(appInfo).toString()
-                            } catch (e: Exception) {
-                                pkg.substringAfterLast(".").replaceFirstChar { it.uppercase() }
-                            }
-                        }
-
-                        Surface(
-                            color = if (isSelected) Color(0xFF2C3246) else Color(0xFF1E1F24),
-                            shape = RoundedCornerShape(20.dp),
-                            border = if (!isSelected) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2C2D31)) else null,
-                            modifier = Modifier
-                                .height(32.dp)
-                                .clickable { viewModel.selectPackage(pkg) }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                // App Icon
-                                val appIcon = remember(pkg) {
-                                    try {
-                                        context.packageManager.getApplicationIcon(pkg)
-                                    } catch (e: Exception) {
-                                        null
-                                    }
-                                }
-                                if (appIcon != null) {
-                                    Image(
-                                        painter = com.google.accompanist.drawablepainter.rememberDrawablePainter(appIcon),
-                                        contentDescription = appName,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                                Text(
-                                    text = appName,
-                                    color = if (isSelected) Color.White else Color(0xFFB0B3B8),
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    fontSize = 12.sp
-                                )
-                            }
-                        }
+                        FilterChipPill(
+                            label = "Custom", 
+                            selected = false, 
+                            icon = Icons.Outlined.CalendarMonth,
+                            iconTint = TextSecondary
+                        ) { showDatePicker = true }
                     }
                 }
+
+                HorizontalDivider(color = Color(0xFF15151F), thickness = 1.dp)
             }
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { 
-                    val permissionCheckResult = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO)
-                    if (permissionCheckResult == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                        isVoiceAiDialogVisible = true
-                        viewModel.startVoiceAi()
-                    } else {
-                        recordAudioPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
-                    }
-                },
-                containerColor = Color(0xFF6B9DFE),
-                contentColor = Color.White,
-                shape = CircleShape,
-                modifier = Modifier.padding(bottom = 8.dp, end = 8.dp)
+            Box(
+                modifier = Modifier
+                    .padding(bottom = 8.dp, end = 8.dp)
+                    .size(68.dp), // Slightly larger to accommodate the ring
+                contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.AutoAwesome, contentDescription = "AI Assistant", modifier = Modifier.size(28.dp))
+                // Circular Progress Ring around the button
+                val infiniteTransition = rememberInfiniteTransition(label = "fabRing")
+                val rotation by infiniteTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 360f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(2000, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart
+                    ),
+                    label = "rotation"
+                )
+
+                CircularProgressIndicator(
+                    progress = { 1f },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .rotate(rotation),
+                    color = NotiBlue.copy(alpha = 0.4f),
+                    strokeWidth = 2.dp,
+                    strokeCap = StrokeCap.Round,
+                )
+                
+                // Pulsing glow for the ring
+                val glowAlpha by infiniteTransition.animateFloat(
+                    initialValue = 0.2f,
+                    targetValue = 0.6f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1500, easing = EaseInOutSine),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "glowAlpha"
+                )
+                
+                androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawCircle(
+                        brush = Brush.sweepGradient(
+                            colors = listOf(NotiBlue, VipPurple, NotiBlue),
+                            center = center
+                        ),
+                        radius = size.minDimension / 2,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(
+                            width = 2.dp.toPx(),
+                            cap = StrokeCap.Round
+                        ),
+                        alpha = glowAlpha
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(60.dp)
+                        .background(
+                            Brush.linearGradient(listOf(NotiBlue, VipPurple)),
+                            CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    FloatingActionButton(
+                        onClick = {
+                            val permissionCheckResult = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO)
+                            if (permissionCheckResult == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                                isVoiceAiOverlayVisible = true
+                                viewModel.startVoiceAi()
+                            } else {
+                                recordAudioPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                            }
+                        },
+                        containerColor = Color.Transparent,
+                        contentColor = Color.White,
+                        shape = CircleShape,
+                        modifier = Modifier.fillMaxSize(),
+                        elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp)
+                    ) {
+                        Icon(Icons.Default.AutoAwesome, contentDescription = "AI Assistant", modifier = Modifier.size(26.dp))
+                    }
+                }
             }
         },
         floatingActionButtonPosition = FabPosition.End
     ) { paddingValues ->
         Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
-            val context = androidx.compose.ui.platform.LocalContext.current
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 120.dp), // Space for FAB
@@ -439,53 +512,95 @@ fun HomeScreen(
                     ) { index ->
                         val notification = pagingItems[index]
                         if (notification != null) {
-                            NotificationCard(
-                                notification = notification,
-                                modifier = Modifier,
-                                onClick = {
-                                    var contentIntent = NotificationIntentCache.get(notification.id)
-                                    android.util.Log.d("PingMateClick", "Clicked ${notification.packageName} id=${notification.id}. Cache hit: ${contentIntent != null}")
-                                    
-                                    if (contentIntent == null && !notification.notificationKey.isNullOrBlank()) {
-                                        android.util.Log.d("PingMateClick", "Attempting resolution from active notifications for key=${notification.notificationKey}")
-                                        PingMateNotificationService.resolveIntentFromActiveNotifications(notification.id, notification.notificationKey)
-                                        contentIntent = NotificationIntentCache.get(notification.id)
-                                        android.util.Log.d("PingMateClick", "Resolved from active: ${contentIntent != null}")
-                                    }
-                                    
-                                    if (contentIntent != null) {
-                                        try {
-                                            android.util.Log.d("PingMateClick", "Sending original contentIntent...")
-                                            contentIntent.send() // Simple overload preserves all original intent extras
-                                            android.util.Log.d("PingMateClick", "Pending intent sent successfully!")
-                                        } catch (e: android.app.PendingIntent.CanceledException) {
-                                            android.util.Log.e("PingMateClick", "PendingIntent was canceled by the OS or source app: ${e.message}")
-                                            context.packageManager.getLaunchIntentForPackage(notification.packageName)?.let { context.startActivity(it) }
-                                        } catch (e: Exception) {
-                                            android.util.Log.e("PingMateClick", "Unknown failure calling contentIntent.send()", e)
-                                            context.packageManager.getLaunchIntentForPackage(notification.packageName)?.let { context.startActivity(it) }
-                                        }
-                                    } else {
-                                        android.util.Log.w("PingMateClick", "Could not resolve contentIntent! Falling back to app launch.")
-                                        context.packageManager.getLaunchIntentForPackage(notification.packageName)?.let { context.startActivity(it) }
-                                    }
-                                },
-                                onFavoriteToggle = { viewModel.toggleFavorite(notification) },
-                                onDelete = { viewModel.deleteNotification(notification) },
-                                onRemind = { 
-                                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                                        if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                                            showReminderFor = notification
-                                        } else {
-                                            notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                                        }
-                                    } else {
-                                        showReminderFor = notification
-                                    }
+                            val dismissState = rememberSwipeToDismissBoxState(
+                                confirmValueChange = { value ->
+                                    if (value == SwipeToDismissBoxValue.EndToStart) {
+                                        viewModel.deleteNotification(notification)
+                                        true
+                                    } else false
                                 }
                             )
+                            SwipeToDismissBox(
+                                state = dismissState,
+                                enableDismissFromStartToEnd = false,
+                                enableDismissFromEndToStart = true,
+                                backgroundContent = {
+                                    val progress = (dismissState.progress).coerceIn(0f, 1f)
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(
+                                                Brush.horizontalGradient(
+                                                    listOf(Color.Transparent, UrgentRed.copy(alpha = (progress * 1.5f).coerceIn(0f, 1f)))
+                                                )
+                                            ),
+                                        contentAlignment = Alignment.CenterEnd
+                                    ) {
+                                        if (progress > 0.1f) {
+                                            Row(
+                                                modifier = Modifier.padding(end = 20.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Outlined.DeleteOutline,
+                                                    null,
+                                                    tint = Color.White.copy(alpha = progress * 2f),
+                                                    modifier = Modifier.size(22.dp)
+                                                )
+                                                if (progress > 0.4f) {
+                                                    Text(
+                                                        "Delete",
+                                                        color = Color.White.copy(alpha = ((progress - 0.4f) * 5f).coerceIn(0f, 1f)),
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 14.sp
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            ) {
+                                NotificationCard(
+                                    notification = notification,
+                                    modifier = Modifier,
+                                    onClick = {
+                                        var contentIntent = NotificationIntentCache.get(notification.id)
+                                        
+                                        if (contentIntent == null && !notification.notificationKey.isNullOrBlank()) {
+                                            PingMateNotificationService.resolveIntentFromActiveNotifications(notification.id, notification.notificationKey)
+                                            contentIntent = NotificationIntentCache.get(notification.id)
+                                        }
+                                        
+                                        if (contentIntent != null) {
+                                            try {
+                                                contentIntent.send()
+                                            } catch (e: Exception) {
+                                                context.packageManager.getLaunchIntentForPackage(notification.packageName)?.let { context.startActivity(it) }
+                                            }
+                                        } else {
+                                            context.packageManager.getLaunchIntentForPackage(notification.packageName)?.let { context.startActivity(it) }
+                                        }
+                                    },
+                                    onFavoriteToggle = { viewModel.toggleFavorite(notification) },
+                                    onDelete = { viewModel.deleteNotification(notification) },
+                                    onRemind = {
+                                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                            if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                                                showReminderFor = notification
+                                            } else {
+                                                notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                            }
+                                        } else {
+                                            showReminderFor = notification
+                                        }
+                                    }
+                                )
+                            }
                         }
                     }
+
                     item {
                         Column(
                             modifier = Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 40.dp),
@@ -505,6 +620,57 @@ fun HomeScreen(
                 }
             }
         }
+        }
+    }
+
+    // Dialogs & Overlays (Declared at bottom for correct Z-index)
+    if (isVoiceAiDialogVisible) {
+        VoiceAiDialog(
+            onDismissRequest = { 
+                isVoiceAiDialogVisible = false
+                viewModel.clearAiState()
+            },
+            transcribedText = transcribedText,
+            aiResponse = aiResponse
+        )
+    }
+
+    if (isVoiceAiOverlayVisible) {
+        VoiceAiFullscreenOverlay(
+            transcribedText = transcribedText,
+            isThinking = aiResponse == "Analyzing your notifications…",
+            onDismiss = {
+                isVoiceAiOverlayVisible = false
+                viewModel.clearAiState()
+            }
+        )
+    }
+
+    showReminderFor?.let { notificationToRemind ->
+        SetReminderDialog(
+            notification = notificationToRemind,
+            onDismiss = { showReminderFor = null },
+            onSave = { timeMillis, note ->
+                viewModel.setReminder(notificationToRemind, timeMillis, note, "")
+                showReminderFor = null
+                showReminderConfirmation = true
+            }
+        )
+    }
+
+    if (showReminderConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showReminderConfirmation = false },
+            title = { Text("Reminder Set", color = Color.White) },
+            text = { Text("Your reminder has been successfully scheduled!", color = Color(0xFFB0B3B8)) },
+            confirmButton = {
+                TextButton(onClick = { showReminderConfirmation = false }) {
+                    Text("OK", color = Color(0xFF6B9DFE))
+                }
+            },
+            containerColor = Color(0xFF1E1F24),
+            shape = RoundedCornerShape(16.dp)
+        )
     }
 }
 
@@ -522,148 +688,523 @@ fun NotificationCard(
     val formattedTime = timeFormat.format(java.util.Date(notification.timestamp)).lowercase()
     val ctx = androidx.compose.ui.platform.LocalContext.current
 
+    // Decode contact/user photo (e.g. WhatsApp sender avatar stored from notification largeIcon)
+    val largeIconBitmap = remember(notification.largeIconBase64) {
+        notification.largeIconBase64?.let { b64 ->
+            try {
+                val bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
+                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    ?.asImageBitmap()
+            } catch (e: Exception) { null }
+        }
+    }
+
+    val appIcon = remember(notification.packageName) {
+        try { ctx.packageManager.getApplicationIcon(notification.packageName) } catch (e: Exception) { null }
+    }
+    val appLabel = remember(notification.packageName) {
+        try {
+            val ai = ctx.packageManager.getApplicationInfo(notification.packageName, 0)
+            ctx.packageManager.getApplicationLabel(ai).toString()
+        } catch (e: Exception) {
+            notification.packageName.substringAfterLast(".").replaceFirstChar { it.uppercase() }
+        }
+    }
+
+    val cardBg by animateColorAsState(
+        targetValue = if (notification.isFavorite) Color(0xFF130F1A) else Color(0xFF0E0E1A),
+        animationSpec = tween(300), label = "cardBg"
+    )
+
     Surface(
-        color = Color(0xFF1E1F24), // Matches the dark background card from the image
+        color = cardBg,
         shape = RoundedCornerShape(16.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2C2D31)),
-        modifier = modifier.fillMaxWidth().clickable { onClick() }
+        border = androidx.compose.foundation.BorderStroke(
+            width = if (notification.isFavorite) 1.5.dp else 1.dp,
+            brush = if (notification.isFavorite)
+                Brush.horizontalGradient(listOf(OtpGold.copy(alpha = 0.55f), VipPurple.copy(alpha = 0.5f)))
+            else
+                Brush.horizontalGradient(listOf(Color(0xFF1A1A2C), Color(0xFF1A1A2C)))
+        ),
+        modifier = modifier.fillMaxWidth(),
+        onClick = onClick
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            // TOP HEADER: Avatar, App Name, Time
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                // Avatar Container
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            // ── Avatar: contact photo from notification (or app icon) + small app badge ──
+            Box(modifier = Modifier.size(50.dp)) {
+                // Primary circle — shows largeIcon (contact photo) OR app icon
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(46.dp)
                         .clip(CircleShape)
-                        .background(Color.White),
+                        .background(Color(0xFF1A1A2C))
+                        .align(Alignment.TopStart),
                     contentAlignment = Alignment.Center
                 ) {
-                    val appIcon = remember(notification.packageName) {
-                        try {
-                            ctx.packageManager.getApplicationIcon(notification.packageName)
-                        } catch (e: Exception) {
-                            null
-                        }
-                    }
-                    
-                    if (appIcon != null) {
+                    if (largeIconBitmap != null) {
                         Image(
+                            bitmap = largeIconBitmap,
+                            contentDescription = null,
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize().clip(CircleShape)
+                        )
+                    } else if (appIcon != null) {
+                        androidx.compose.foundation.Image(
                             painter = com.google.accompanist.drawablepainter.rememberDrawablePainter(appIcon),
-                            contentDescription = notification.packageName,
-                            modifier = Modifier.size(24.dp)
+                            contentDescription = null,
+                            modifier = Modifier.size(28.dp).clip(CircleShape)
                         )
                     } else {
-                        Icon(
-                            imageVector = Icons.Default.Apps, 
-                            contentDescription = "App Icon", 
-                            tint = Color.Black, 
-                            modifier = Modifier.size(20.dp)
-                        )
+                        Icon(Icons.Default.Apps, null, tint = TextMuted, modifier = Modifier.size(22.dp))
                     }
                 }
-                
-                Spacer(modifier = Modifier.width(12.dp))
-                
-                val pkgNameDisplay = notification.packageName.substringAfterLast(".").uppercase()
-                Text(
-                    text = pkgNameDisplay,
-                    style = PingMateTypography.labelMedium.copy(letterSpacing = 1.sp, fontWeight = FontWeight.ExtraBold),
-                    color = Color.White
-                )
-                
-                Spacer(modifier = Modifier.weight(1f))
-                
-                Text(
-                    text = formattedTime,
-                    style = PingMateTypography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = Color(0xFFB0B3B8)
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            // TITLE
-            Text(
-                text = notification.title.ifBlank { "System" },
-                style = PingMateTypography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
-                color = Color.White
-            )
-            
-            Spacer(modifier = Modifier.height(6.dp))
-            
-            // Message
-            Text(
-                text = notification.content,
-                style = PingMateTypography.bodyMedium.copy(lineHeight = 20.sp),
-                color = Color(0xFFB0B3B8),
-                maxLines = 3, 
-                overflow = TextOverflow.Ellipsis
-            )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            HorizontalDivider(color = Color(0xFF2C2D31), thickness = 1.dp)
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // Bottom Action Row matching image exactly
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Left Side Actions
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Reply Button (Left arrow icon + Text)
-                    Row(
-                        modifier = Modifier.clickable { /* Handle Reply */ },
-                        verticalAlignment = Alignment.CenterVertically
+
+                // Small app-icon badge in bottom-right corner (only when showing contact photo)
+                if (largeIconBitmap != null && appIcon != null) {
+                    Box(
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF09090F))
+                            .border(1.5.dp, Color(0xFF09090F), CircleShape)
+                            .align(Alignment.BottomEnd),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Reply,
-                            contentDescription = "Reply",
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Reply",
-                            color = Color.White,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold
+                        androidx.compose.foundation.Image(
+                            painter = com.google.accompanist.drawablepainter.rememberDrawablePainter(appIcon),
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
                         )
                     }
-                    
-                    Spacer(modifier = Modifier.width(32.dp))
-                    
-                    // Favorite Star (Outline by default)
-                    Icon(
-                        imageVector = if (notification.isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
-                        contentDescription = "Favorite",
-                        tint = if (notification.isFavorite) Color(0xFFFACC15) else Color.White,
-                        modifier = Modifier.size(20.dp).clickable { onFavoriteToggle() }
+                }
+            }
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            // ── Content column ──
+            Column(modifier = Modifier.weight(1f)) {
+                // App name + timestamp
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = appLabel,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = NotiBlue,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f)
                     )
-                    
-                    Spacer(modifier = Modifier.width(24.dp))
-                    
-                    // Reminder Clock
-                    Icon(
-                        imageVector = Icons.Outlined.AccessTime,
-                        contentDescription = "Set Reminder",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp).clickable { onRemind() }
+                    Text(formattedTime, fontSize = 10.sp, color = TextHint, fontWeight = FontWeight.Medium)
+                }
+
+                Spacer(modifier = Modifier.height(3.dp))
+
+                // Sender / Title
+                if (notification.title.isNotBlank()) {
+                    Text(
+                        text = notification.title,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 17.sp
                     )
                 }
-                
-                // Right Side Delete (Red Trash Can)
-                Icon(
-                    imageVector = Icons.Outlined.DeleteOutline,
-                    contentDescription = "Delete",
-                    tint = Color(0xFFE01E5A),
-                    modifier = Modifier.size(20.dp).clickable { onDelete() }
+
+                // Preview text
+                Text(
+                    text = notification.content,
+                    fontSize = 12.sp,
+                    color = TextSecondary,
+                    lineHeight = 17.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // ── ⭐ Save + ⏰ Remind chips ──
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    val isFav = notification.isFavorite
+                    // Star / Save
+                    Surface(
+                        color = if (isFav) OtpGold.copy(alpha = 0.12f) else Color(0xFF16161E),
+                        shape = RoundedCornerShape(12.dp),
+                        border = if (isFav) androidx.compose.foundation.BorderStroke(1.dp, OtpGold.copy(alpha = 0.4f)) else null,
+                        modifier = Modifier.clickable { onFavoriteToggle() }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            AnimatedContent(
+                                targetState = isFav,
+                                transitionSpec = { scaleIn(spring(Spring.DampingRatioMediumBouncy)) + fadeIn() togetherWith scaleOut() + fadeOut() },
+                                label = "starAnim"
+                            ) { fav ->
+                                Icon(
+                                    imageVector = if (fav) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                                    contentDescription = null,
+                                    tint = if (fav) OtpGold else TextMuted,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            }
+                            Text(
+                                text = if (isFav) "Saved" else "Save",
+                                fontSize = 11.sp,
+                                color = if (isFav) OtpGold else TextMuted,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                    // Clock / Remind
+                    Surface(
+                        color = NotiBlue.copy(alpha = 0.08f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.clickable { onRemind() }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(Icons.Outlined.AccessTime, null, tint = NotiBlue, modifier = Modifier.size(13.dp))
+                            Text("Remind", fontSize = 11.sp, color = NotiBlue, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper composables
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+fun TopBarIconBtn(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .background(Color(0xFF13131E), CircleShape)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, null, tint = TextSecondary, modifier = Modifier.size(18.dp))
+    }
+}
+
+@Composable
+fun FilterChipPill(
+    label: String,
+    selected: Boolean,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    iconTint: Color = TextMuted,
+    drawable: android.graphics.drawable.Drawable? = null,
+    onClick: () -> Unit
+) {
+    val bgColor by animateColorAsState(
+        targetValue = if (selected) NotiBlue.copy(alpha = 0.16f) else Color(0xFF111120),
+        animationSpec = tween(220), label = "chipBg"
+    )
+    val textColor by animateColorAsState(
+        targetValue = if (selected) NotiBlue else TextMuted,
+        animationSpec = tween(220), label = "chipTxt"
+    )
+    Surface(
+        color = bgColor,
+        shape = RoundedCornerShape(20.dp),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (selected) NotiBlue.copy(alpha = 0.45f) else Color(0xFF1C1C2C)
+        ),
+        modifier = Modifier
+            .height(30.dp)
+            .clickable { onClick() }
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            if (drawable != null) {
+                androidx.compose.foundation.Image(
+                    painter = com.google.accompanist.drawablepainter.rememberDrawablePainter(drawable),
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp)
                 )
             }
+            if (icon != null) {
+                Icon(icon, null, tint = iconTint, modifier = Modifier.size(12.dp))
+            }
+            Text(
+                text = label,
+                fontSize = 12.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = textColor
+            )
+        }
+    }
+}
+
+@Composable
+fun InlineDateStrip(
+    selectedDate: java.util.Date?,
+    onDateSelected: (java.util.Date?) -> Unit
+) {
+    val today = remember {
+        val c = java.util.Calendar.getInstance(); c.set(java.util.Calendar.HOUR_OF_DAY, 0); c.set(java.util.Calendar.MINUTE, 0); c.set(java.util.Calendar.SECOND, 0); c.set(java.util.Calendar.MILLISECOND, 0); c.time
+    }
+
+    // Build last 14 days
+    val dates = remember {
+        (0..13).map { daysAgo ->
+            val c = java.util.Calendar.getInstance()
+            c.time = today
+            c.add(java.util.Calendar.DAY_OF_YEAR, -daysAgo)
+            c.time
+        }
+    }
+
+    val dayFormat = remember { java.text.SimpleDateFormat("EEE", java.util.Locale.getDefault()) }
+    val numFormat = remember { java.text.SimpleDateFormat("d", java.util.Locale.getDefault()) }
+
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // "All" chip
+        item {
+            val sel = selectedDate == null
+            DateChip(
+                dayLabel = "ALL",
+                numLabel = "•",
+                selected = sel,
+                onClick = { onDateSelected(null) }
+            )
+        }
+        items(dates) { date ->
+            val dayLabel = when {
+                isSameDay(date, today) -> "TODAY"
+                isSameDay(date, yesterday(today)) -> "YEST."
+                else -> dayFormat.format(date).uppercase()
+            }
+            val numLabel = numFormat.format(date)
+            val sel = selectedDate != null && isSameDay(date, selectedDate)
+            DateChip(dayLabel = dayLabel, numLabel = numLabel, selected = sel) {
+                onDateSelected(if (sel) null else date)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DateChip(dayLabel: String, numLabel: String, selected: Boolean, onClick: () -> Unit) {
+    val bg by animateColorAsState(
+        targetValue = if (selected) NotiBlue else Color(0xFF111120),
+        animationSpec = tween(200), label = "dateBg"
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (selected) 1.05f else 1f,
+        animationSpec = spring(Spring.DampingRatioMediumBouncy), label = "dateScale"
+    )
+    Box(
+        modifier = Modifier
+            .scale(scale)
+            .clip(RoundedCornerShape(12.dp))
+            .background(bg)
+            .border(
+                width = 1.dp,
+                color = if (selected) NotiBlue else Color(0xFF1C1C2C),
+                shape = RoundedCornerShape(12.dp)
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = dayLabel,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (selected) Color.White else TextMuted,
+                letterSpacing = 0.5.sp
+            )
+            Text(
+                text = numLabel,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = if (selected) Color.White else TextSecondary
+            )
+        }
+    }
+}
+
+private fun isSameDay(a: java.util.Date, b: java.util.Date): Boolean {
+    val ca = java.util.Calendar.getInstance().apply { time = a }
+    val cb = java.util.Calendar.getInstance().apply { time = b }
+    return ca.get(java.util.Calendar.YEAR) == cb.get(java.util.Calendar.YEAR) &&
+            ca.get(java.util.Calendar.DAY_OF_YEAR) == cb.get(java.util.Calendar.DAY_OF_YEAR)
+}
+
+private fun yesterday(today: java.util.Date): java.util.Date {
+    val c = java.util.Calendar.getInstance()
+    c.time = today
+    c.add(java.util.Calendar.DAY_OF_YEAR, -1)
+    return c.time
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Immersive Voice AI Fullscreen Overlay
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+fun VoiceAiFullscreenOverlay(
+    transcribedText: String,
+    isThinking: Boolean,
+    onDismiss: () -> Unit
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "aiPulse")
+    val glowAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.05f, 
+        targetValue = 0.25f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = EaseInOutSine),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "glow"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(NotiBlue.copy(alpha = 0.15f), Color.Black),
+                    center = androidx.compose.ui.geometry.Offset.Unspecified,
+                    radius = 2000f
+                )
+            )
+            .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { onDismiss() }
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // Large Lottie Animation with Pulsing Glow
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(320.dp)
+            ) {
+                // Background Glow Ring
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize(0.8f)
+                        .background(
+                            Brush.radialGradient(
+                                listOf(VipPurple.copy(alpha = glowAlpha), Color.Transparent)
+                            ),
+                            CircleShape
+                        )
+                )
+
+                val composition by com.airbnb.lottie.compose.rememberLottieComposition(
+                    com.airbnb.lottie.compose.LottieCompositionSpec.RawRes(com.app.pingmate.R.raw.ai_animation)
+                )
+                val progress by com.airbnb.lottie.compose.animateLottieCompositionAsState(
+                    composition = composition,
+                    iterations = com.airbnb.lottie.compose.LottieConstants.IterateForever
+                )
+                com.airbnb.lottie.compose.LottieAnimation(
+                    composition = composition,
+                    progress = { progress },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // Transcription Glass Bubble - Now directly under Lottie
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 32.dp)
+                    .fillMaxWidth()
+            ) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth().wrapContentHeight(),
+                    shape = RoundedCornerShape(24.dp),
+                    color = Color.White.copy(alpha = 0.05f),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp, 
+                        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.1f), Color.Transparent))
+                    )
+                ) {
+                    Box(
+                        modifier = Modifier.padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AnimatedContent(
+                            targetState = if (isThinking) "thinking" else transcribedText,
+                            transitionSpec = { fadeIn(tween(500)) togetherWith fadeOut(tween(400)) },
+                            label = "overlayTranscription"
+                        ) { text ->
+                            if (text == "thinking") {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.AutoAwesome,
+                                        contentDescription = null,
+                                        tint = NotiBlue,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        "Processing Context...",
+                                        color = Color.White,
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    text = if (text.isBlank()) "I'm listening..." else text,
+                                    color = if (text.isBlank()) TextMuted else Color.White,
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    textAlign = TextAlign.Center,
+                                    lineHeight = 28.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Close button top right
+        IconButton(
+            onClick = onDismiss,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(20.dp)
+                .size(40.dp)
+                .background(Color.White.copy(alpha = 0.08f), CircleShape)
+        ) {
+            Icon(Icons.Default.Close, null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
         }
     }
 }

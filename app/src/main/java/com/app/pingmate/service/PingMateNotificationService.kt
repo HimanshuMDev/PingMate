@@ -99,11 +99,31 @@ class PingMateNotificationService : NotificationListenerService() {
                 val contentIntent = notification.notification.contentIntent
                 val notificationKey = notification.key
 
+                // Extract contact photo / large icon (e.g. WhatsApp sender avatar)
+                val largeIconBase64: String? = try {
+                    val iconBig = extras.getParcelable<android.graphics.Bitmap>(
+                        android.app.Notification.EXTRA_LARGE_ICON_BIG
+                    ) ?: extras.getParcelable<android.graphics.Bitmap>(
+                        android.app.Notification.EXTRA_LARGE_ICON
+                    )
+                    iconBig?.let { bmp ->
+                        val stream = java.io.ByteArrayOutputStream()
+                        bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 80, stream)
+                        android.util.Base64.encodeToString(stream.toByteArray(), android.util.Base64.DEFAULT)
+                    }
+                } catch (e: Exception) {
+                    Log.w("PingMateService", "Could not extract largeIcon: ${e.message}")
+                    null
+                }
+
                 serviceScope.launch {
                     val existing = db.notificationDao.getRecentNotification(packageName, title, text)
                     if (existing != null) {
-                        // Prevent duplicates by just updating the timestamp; keep key for intent resolution
-                        val updated = existing.copy(timestamp = postTime, notificationKey = notificationKey)
+                        val updated = existing.copy(
+                            timestamp = postTime,
+                            notificationKey = notificationKey,
+                            largeIconBase64 = largeIconBase64 ?: existing.largeIconBase64
+                        )
                         db.notificationDao.updateNotification(updated)
                         contentIntent?.let { NotificationIntentCache.put(updated.id, it) }
                     } else {
@@ -113,12 +133,14 @@ class PingMateNotificationService : NotificationListenerService() {
                             content = text,
                             timestamp = postTime,
                             isFavorite = false,
-                            notificationKey = notificationKey
+                            notificationKey = notificationKey,
+                            largeIconBase64 = largeIconBase64
                         )
                         val insertedId = db.notificationDao.insertNotification(entity).toInt()
                         contentIntent?.let { NotificationIntentCache.put(insertedId, it) }
                     }
                 }
+
             } else {
                  Log.v("PingMateService", "Ignored notification from untracked package or empty text: $packageName")
             }

@@ -37,11 +37,17 @@ class ReminderReceiver : BroadcastReceiver() {
         )
 
         val notification = NotificationCompat.Builder(context, "pingmate_reminders")
-            .setSmallIcon(android.R.drawable.ic_popup_reminder)
-            .setContentTitle("⏰ Reminder: $title")
+            .setSmallIcon(android.R.drawable.ic_popup_reminder) // Replacing with system reminder icon for now
+            .setContentTitle("Alert: $title")
             .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setColor(0xFF6B9DFE.toInt()) // NotiBlue
             .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setVibrate(longArrayOf(0, 500, 200, 500))
             .setContentIntent(pendingIntent)
             .build()
 

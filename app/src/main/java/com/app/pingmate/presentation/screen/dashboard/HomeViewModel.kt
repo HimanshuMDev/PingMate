@@ -164,7 +164,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             val alarmManager = getApplication<Application>().getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
             val intent = android.content.Intent(getApplication(), com.app.pingmate.receiver.ReminderReceiver::class.java).apply {
                 var messageDisplay = notification.content
-                if (note.isNotBlank()) messageDisplay = "[$tag] $note\n\n$messageDisplay"
+                if (note.isNotBlank()) {
+                    messageDisplay = if (tag.isNotBlank()) "[$tag] $note\n\n$messageDisplay" else "$note\n\n$messageDisplay"
+                }
                 
                 putExtra("EXTRA_TITLE", notification.title)
                 putExtra("EXTRA_MESSAGE", messageDisplay)
