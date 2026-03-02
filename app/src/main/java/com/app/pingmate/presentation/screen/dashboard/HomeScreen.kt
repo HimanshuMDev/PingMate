@@ -29,7 +29,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.*
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
@@ -40,9 +42,15 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.text.ClickableText
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withAnnotation
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -57,6 +65,7 @@ import java.util.Locale
 
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
+import com.airbnb.lottie.compose.*
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -70,7 +79,6 @@ fun HomeScreen(
     val remindersList by viewModel.remindersList.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
     var isSearchExpanded by remember { mutableStateOf(false) }
     var isVoiceAiOverlayVisible by remember { mutableStateOf(false) }
@@ -111,150 +119,16 @@ fun HomeScreen(
     }
 
     LaunchedEffect(aiResponse) {
-        val skip = aiResponse == null || aiResponse == "Analyzing your notifications…" || aiResponse == "Setting reminder…"
-        if (!skip && isVoiceAiOverlayVisible) {
+        if (aiResponse != null && isVoiceAiOverlayVisible) {
             isVoiceAiOverlayVisible = false
             isVoiceAiDialogVisible = true
         }
     }
 
-    // Main UI with Drawer
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        gesturesEnabled = true,
-        drawerContent = {
-            ModalDrawerSheet(
-                drawerContainerColor = Color(0xFF0F0F18),
-                drawerTonalElevation = 0.dp,
-                modifier = Modifier.fillMaxWidth(0.75f),
-                windowInsets = WindowInsets.statusBars
-            ) {
-                Column(modifier = Modifier.padding(24.dp)) {
-                    Text(
-                        "FILTER BY APP",
-                        style = PingMateTypography.titleSmall.copy(letterSpacing = 2.sp),
-                        color = NotiBlue,
-                        fontWeight = FontWeight.Black
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
+    val distinctPackageNames by viewModel.distinctPackageNames.collectAsState()
 
-                    val distinctPackageNames by viewModel.distinctPackageNames.collectAsState()
-                    val selectedPackageName by viewModel.selectedPackageName.collectAsState()
-
-                    // Favorites
-                    NavigationDrawerItem(
-                        label = { Text("Favorites", fontWeight = FontWeight.SemiBold) },
-                        selected = selectedPackageName == "FAVORITES",
-                        onClick = {
-                            viewModel.selectPackage(if (selectedPackageName == "FAVORITES") null else "FAVORITES")
-                            scope.launch { drawerState.close() }
-                        },
-                        icon = { Icon(if (selectedPackageName == "FAVORITES") Icons.Filled.Star else Icons.Outlined.StarBorder, null) },
-                        colors = NavigationDrawerItemDefaults.colors(
-                            selectedContainerColor = NotiBlue.copy(alpha = 0.15f),
-                            selectedIconColor = OtpGold,
-                            selectedTextColor = Color.White,
-                            unselectedContainerColor = Color.Transparent,
-                            unselectedIconColor = TextMuted,
-                            unselectedTextColor = TextSecondary
-                        ),
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-
-                    // Reminders
-                    NavigationDrawerItem(
-                        label = { Text("Reminders", fontWeight = FontWeight.SemiBold) },
-                        selected = selectedPackageName == "REMINDERS",
-                        onClick = {
-                            viewModel.selectPackage(if (selectedPackageName == "REMINDERS") null else "REMINDERS")
-                            scope.launch { drawerState.close() }
-                        },
-                        icon = { Icon(Icons.Outlined.AccessTime, null) },
-                        colors = NavigationDrawerItemDefaults.colors(
-                            selectedContainerColor = NotiBlue.copy(alpha = 0.15f),
-                            selectedIconColor = NotiBlue,
-                            selectedTextColor = Color.White,
-                            unselectedContainerColor = Color.Transparent,
-                            unselectedIconColor = TextMuted,
-                            unselectedTextColor = TextSecondary
-                        ),
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-
-                    HorizontalDivider(color = Color(0xFF1C1C2C), modifier = Modifier.padding(vertical = 12.dp))
-
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        item {
-                            NavigationDrawerItem(
-                                label = { Text("All Applications", fontWeight = FontWeight.SemiBold) },
-                                selected = selectedPackageName == null,
-                                onClick = {
-                                    viewModel.selectPackage(null)
-                                    scope.launch { drawerState.close() }
-                                },
-                                icon = { Icon(Icons.Outlined.Apps, null) },
-                                colors = NavigationDrawerItemDefaults.colors(
-                                    selectedContainerColor = NotiBlue.copy(alpha = 0.15f),
-                                    selectedIconColor = NotiBlue,
-                                    selectedTextColor = Color.White,
-                                    unselectedContainerColor = Color.Transparent,
-                                    unselectedIconColor = TextMuted,
-                                    unselectedTextColor = TextSecondary
-                                ),
-                                shape = RoundedCornerShape(16.dp)
-                            )
-                        }
-
-                        items(distinctPackageNames) { pkg ->
-                            val appName = remember(pkg) {
-                                try {
-                                    val pm = context.packageManager
-                                    pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
-                                } catch (e: Exception) {
-                                    pkg.substringAfterLast(".").replaceFirstChar { it.uppercase() }
-                                }
-                            }
-                            val appIcon = remember(pkg) {
-                                try { context.packageManager.getApplicationIcon(pkg) } catch (e: Exception) { null }
-                            }
-
-                            NavigationDrawerItem(
-                                label = { Text(appName, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                                selected = selectedPackageName == pkg,
-                                onClick = {
-                                    viewModel.selectPackage(pkg)
-                                    scope.launch { drawerState.close() }
-                                },
-                                icon = {
-                                    if (appIcon != null) {
-                                        androidx.compose.foundation.Image(
-                                            painter = com.google.accompanist.drawablepainter.rememberDrawablePainter(appIcon),
-                                            contentDescription = null,
-                                            modifier = Modifier.size(28.dp)
-                                        )
-                                    } else {
-                                        Icon(Icons.Outlined.Label, null, modifier = Modifier.size(24.dp), tint = TextMuted)
-                                    }
-                                },
-                                colors = NavigationDrawerItemDefaults.colors(
-                                    selectedContainerColor = NotiBlue.copy(alpha = 0.15f),
-                                    selectedIconColor = NotiBlue,
-                                    selectedTextColor = Color.White,
-                                    unselectedContainerColor = Color.Transparent,
-                                    unselectedIconColor = TextMuted,
-                                    unselectedTextColor = TextSecondary
-                                ),
-                                shape = RoundedCornerShape(16.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    ) {
-        Scaffold(
+    // Main UI: header with inline filters (no drawer)
+    Scaffold(
             containerColor = Color(0xFF09090F),
             topBar = {
             Column(
@@ -314,14 +188,59 @@ fun HomeScreen(
                             letterSpacing = (-0.5).sp,
                             modifier = Modifier.weight(1f)
                         )
-                        // Action icons with dark pill backgrounds
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            TopBarIconBtn(icon = Icons.Outlined.FilterList) { 
-                                scope.launch { drawerState.open() }
-                            }
                             TopBarIconBtn(icon = Icons.Outlined.Search) { isSearchExpanded = true }
                             TopBarIconBtn(icon = Icons.Outlined.Settings) { onOpenSettings() }
                         }
+                    }
+                }
+
+                // ── Inline filter chips: All, Favorites, Reminders, apps ─────────────────────
+                LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    item {
+                        FilterChipPill(
+                            label = "All",
+                            selected = selectedPackageName == null,
+                            onClick = { viewModel.selectPackage(null) }
+                        )
+                    }
+                    item {
+                        FilterChipPill(
+                            label = "Favorites",
+                            selected = selectedPackageName == "FAVORITES",
+                            onClick = { viewModel.selectPackage(if (selectedPackageName == "FAVORITES") null else "FAVORITES") }
+                        )
+                    }
+                    item {
+                        FilterChipPill(
+                            label = "Reminders",
+                            selected = selectedPackageName == "REMINDERS",
+                            onClick = { viewModel.selectPackage(if (selectedPackageName == "REMINDERS") null else "REMINDERS") }
+                        )
+                    }
+                    items(
+                        distinctPackageNames,
+                        key = { it }
+                    ) { pkg ->
+                        val appName = remember(pkg) {
+                            try {
+                                context.packageManager.getApplicationLabel(context.packageManager.getApplicationInfo(pkg, 0)).toString()
+                            } catch (e: Exception) {
+                                pkg.substringAfterLast(".").replaceFirstChar { it.uppercase() }
+                            }
+                        }
+                        FilterChipPill(
+                            label = appName,
+                            selected = selectedPackageName == pkg,
+                            onClick = { viewModel.selectPackage(if (selectedPackageName == pkg) null else pkg) }
+                        )
                     }
                 }
 
@@ -485,7 +404,7 @@ fun HomeScreen(
                 .then(
                     if (isVoiceAiOverlayVisible && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
                         Modifier.graphicsLayer {
-                            renderEffect = BlurEffect(72f, 72f, TileMode.Clamp)
+                            renderEffect = BlurEffect(100f, 100f, TileMode.Clamp)
                         }
                     } else Modifier
                 )
@@ -535,16 +454,9 @@ fun HomeScreen(
                 when {
                     pagingItems.loadState.refresh is androidx.paging.LoadState.Loading && pagingItems.itemCount == 0 -> {
                         item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(48.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    CircularProgressIndicator(color = NotiBlue, strokeWidth = 2.dp)
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    Text("Loading…", color = TextMuted, fontSize = 13.sp)
+                            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                repeat(5) {
+                                    ShimmerNotificationCard()
                                 }
                             }
                         }
@@ -555,27 +467,28 @@ fun HomeScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 24.dp)
-                                    .padding(top = 48.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
+                                    .padding(top = 100.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
                             ) {
-                                Icon(
-                                    Icons.Outlined.NotificationsNone,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(48.dp),
-                                    tint = Color(0xFF3D3E48)
+                                val composition by rememberLottieComposition(LottieCompositionSpec.Url("https://assets10.lottiefiles.com/packages/lf20_m6cu96.json")) // Relaxing/Empty state
+                                LottieAnimation(
+                                    composition = composition,
+                                    iterations = LottieConstants.IterateForever,
+                                    modifier = Modifier.size(200.dp)
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
                                 Text(
-                                    text = "No notifications found",
-                                    color = Color(0xFF6B6F7A),
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Medium
+                                    text = "All caught up!",
+                                    color = Color.White,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "Notifications from your selected apps will appear here",
-                                    color = Color(0xFF4A4D56),
-                                    fontSize = 13.sp,
-                                    modifier = Modifier.padding(top = 6.dp)
+                                    text = "No new alerts to show right now.",
+                                    color = TextMuted,
+                                    fontSize = 14.sp,
+                                    modifier = Modifier.padding(top = 8.dp)
                                 )
                             }
                         }
@@ -600,40 +513,30 @@ fun HomeScreen(
                                 enableDismissFromStartToEnd = false,
                                 enableDismissFromEndToStart = true,
                                 backgroundContent = {
+                                    val isDismissing = dismissState.targetValue == SwipeToDismissBoxValue.EndToStart
                                     val progress = (dismissState.progress).coerceIn(0f, 1f)
                                     Box(
                                         modifier = Modifier
                                             .fillMaxSize()
-                                            .clip(RoundedCornerShape(16.dp))
-                                            .background(
-                                                Brush.horizontalGradient(
-                                                    listOf(Color.Transparent, UrgentRed.copy(alpha = (progress * 1.5f).coerceIn(0f, 1f)))
-                                                )
-                                            ),
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(if (isDismissing) Color(0xFF2A1515) else Color.Transparent)
+                                            .padding(end = 24.dp),
                                         contentAlignment = Alignment.CenterEnd
                                     ) {
-                                        if (progress > 0.1f) {
-                                            Row(
-                                                modifier = Modifier.padding(end = 20.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                            ) {
-                                                Icon(
-                                                    Icons.Outlined.DeleteOutline,
-                                                    null,
-                                                    tint = Color.White.copy(alpha = progress * 2f),
-                                                    modifier = Modifier.size(22.dp)
-                                                )
-                                                if (progress > 0.4f) {
-                                                    Text(
-                                                        "Delete",
-                                                        color = Color.White.copy(alpha = ((progress - 0.4f) * 5f).coerceIn(0f, 1f)),
-                                                        fontWeight = FontWeight.Bold,
-                                                        fontSize = 14.sp
-                                                    )
-                                                }
-                                            }
+                                        if (isDismissing) {
+                                            val composition by rememberLottieComposition(LottieCompositionSpec.Url("https://assets9.lottiefiles.com/packages/lf20_klid7z.json")) // Dust/Delete effect
+                                            LottieAnimation(
+                                                composition = composition,
+                                                iterations = 1,
+                                                modifier = Modifier.size(80.dp)
+                                            )
                                         }
+                                        Icon(
+                                            Icons.Default.Delete,
+                                            contentDescription = "Delete",
+                                            tint = if (isDismissing) Color(0xFFA85A66) else Color.Transparent,
+                                            modifier = Modifier.scale(if (isDismissing) 1.2f else 1f)
+                                        )
                                     }
                                 }
                             ) {
@@ -726,8 +629,6 @@ fun HomeScreen(
                     }
                 }
             }
-            }
-        }
         }
     }
 
@@ -798,10 +699,11 @@ fun HomeScreen(
         )
     }
 
+    val isAiProcessing by viewModel.isAiProcessing.collectAsState()
     if (isVoiceAiOverlayVisible) {
         VoiceAiFullscreenOverlay(
             transcribedText = transcribedText,
-            isThinking = aiResponse == "Analyzing your notifications…",
+            isThinking = isAiProcessing,
             onDismiss = {
                 isVoiceAiOverlayVisible = false
                 viewModel.clearAiState()
@@ -841,6 +743,7 @@ fun HomeScreen(
             shape = RoundedCornerShape(16.dp)
         )
     }
+    } // Scaffold content
 }
 
 @Composable
@@ -991,15 +894,40 @@ fun NotificationCard(
     val contentMaxLines = if (compact) 2 else 20
     val showBigPictureInCard = !compact && bigPictureBitmap != null
     val isFav = notification.isFavorite
-    // Dark card for premium look; favorite = barely different border
-    val cardBg = Color(0xFF0E0E12)
-    val cardBorder = if (isFav) Color(0xFF22222C) else Color(0xFF16161C)
+    // Same card style as Choose App screen: unified premium look
+    val cardBg = if (isFav) Color(0xFF10182A) else Color(0xFF0E0E1A)
+    val cardBorder = if (isFav) NotiBlue.copy(alpha = 0.35f) else Color(0xFF1F1F38)
+    val scale by animateFloatAsState(
+        targetValue = if (isFav) 1.01f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessLow), label = "cardScale"
+    )
+    val glowColor by animateColorAsState(
+        targetValue = if (isFav) NotiBlue.copy(alpha = 0.08f) else Color.Transparent,
+        animationSpec = tween(400), label = "cardGlow"
+    )
 
     Surface(
         color = cardBg,
-        shape = RoundedCornerShape(14.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, cardBorder),
-        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        border = androidx.compose.foundation.BorderStroke(
+            width = if (isFav) 1.5.dp else 1.dp,
+            brush = if (isFav) Brush.horizontalGradient(listOf(NotiBlue, VipPurple)) else Brush.horizontalGradient(listOf(cardBorder, cardBorder))
+        ),
+        modifier = modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .drawBehind {
+                if (isFav) {
+                    drawRoundRect(
+                        color = glowColor,
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(14.dp.toPx()),
+                        size = size
+                    )
+                }
+            },
         shadowElevation = 0.dp,
         tonalElevation = 0.dp,
         onClick = onClick
@@ -1279,10 +1207,11 @@ fun NotificationDetailSheetContent(
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        Text(
+        LinkifyText(
             text = notification.content,
             fontSize = 14.sp,
             color = Color(0xFF9A9DA8),
+            linkColor = NotiBlue,
             lineHeight = 22.sp
         )
 
@@ -1376,6 +1305,60 @@ fun NotificationDetailSheetContent(
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper composables
 // ─────────────────────────────────────────────────────────────────────────────
+
+private val urlPattern = Regex("""(https?://[^\s]+)|(www\.[^\s]+)""")
+
+@Composable
+fun LinkifyText(
+    text: String,
+    modifier: Modifier = Modifier,
+    fontSize: androidx.compose.ui.unit.TextUnit = 14.sp,
+    color: Color = Color(0xFF9A9DA8),
+    linkColor: Color = NotiBlue,
+    lineHeight: androidx.compose.ui.unit.TextUnit = 22.sp,
+    maxLines: Int = Int.MAX_VALUE
+) {
+    val context = LocalContext.current
+    val annotated = remember(text) {
+        buildAnnotatedString {
+            if (text.isBlank()) {
+                append(text)
+                return@buildAnnotatedString
+            }
+            var lastEnd = 0
+            urlPattern.findAll(text).forEach { match ->
+                append(text.substring(lastEnd, match.range.first))
+                val url = match.value.let { if (it.startsWith("www.")) "https://$it" else it }
+                pushStringAnnotation("URL", url)
+                withStyle(SpanStyle(color = linkColor)) { append(match.value) }
+                pop()
+                lastEnd = match.range.last + 1
+            }
+            append(text.substring(lastEnd))
+        }
+    }
+    ClickableText(
+        text = annotated,
+        modifier = modifier,
+        style = androidx.compose.ui.text.TextStyle(
+            fontSize = fontSize,
+            color = color,
+            lineHeight = lineHeight
+        ),
+        maxLines = maxLines,
+        onClick = { offset ->
+            annotated.getStringAnnotations("URL", offset, offset).firstOrNull()?.let { range ->
+                try {
+                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(range.item))
+                    intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(intent)
+                } catch (e: Exception) {
+                    android.widget.Toast.makeText(context, "Cannot open link", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    )
+}
 
 @Composable
 fun TopBarIconBtn(
@@ -1553,6 +1536,81 @@ private fun yesterday(today: java.util.Date): java.util.Date {
     return c.time
 }
 
+@Composable
+fun ShimmerNotificationCard() {
+    Surface(
+        color = Color(0xFF0E0E12),
+        shape = RoundedCornerShape(14.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF16161C)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .shimmerEffect()
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.4f)
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .shimmerEffect()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.9f)
+                        .height(12.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .shimmerEffect()
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.7f)
+                        .height(12.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .shimmerEffect()
+                )
+            }
+        }
+    }
+}
+
+fun Modifier.shimmerEffect(): Modifier = composed {
+    var size by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val startOffsetX by transition.animateFloat(
+        initialValue = -2 * size.width.toFloat(),
+        targetValue = 2 * size.width.toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200)
+        ),
+        label = "shimmerOffset"
+    )
+
+    background(
+        brush = Brush.linearGradient(
+            colors = listOf(
+                Color(0xFF1A1A24),
+                Color(0xFF262636),
+                Color(0xFF1A1A24),
+            ),
+            start = androidx.compose.ui.geometry.Offset(startOffsetX, 0f),
+            end = androidx.compose.ui.geometry.Offset(startOffsetX + size.width.toFloat(), size.height.toFloat())
+        )
+    ).onGloballyPositioned {
+        size = it.size
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Immersive Voice AI Fullscreen Overlay
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1565,7 +1623,7 @@ fun VoiceAiFullscreenOverlay(
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "aiPulse")
     val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.05f, 
+        initialValue = 0.05f,
         targetValue = 0.25f,
         animationSpec = infiniteRepeatable(
             animation = tween(1500, easing = EaseInOutSine),
@@ -1574,11 +1632,11 @@ fun VoiceAiFullscreenOverlay(
         label = "glow"
     )
 
-    // Dark overlay so blurred content behind reads clearly; stronger blur in parent
+    // Full-screen blur: dark overlay so background is clearly blurred
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.52f))
+            .background(Color.Black.copy(alpha = 0.62f))
             .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { onDismiss() }
     ) {
         Column(
@@ -1586,16 +1644,17 @@ fun VoiceAiFullscreenOverlay(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
+            // Smaller Lottie for a cleaner look
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier.size(280.dp)
+                modifier = Modifier.size(160.dp)
             ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxSize(0.85f)
+                        .fillMaxSize(0.9f)
                         .background(
                             Brush.radialGradient(
-                                listOf(Color(0xFF6B7FE8).copy(alpha = glowAlpha * 0.6f), Color.Transparent)
+                                listOf(Color(0xFF6B7FE8).copy(alpha = glowAlpha * 0.5f), Color.Transparent)
                             ),
                             CircleShape
                         )
@@ -1614,54 +1673,54 @@ fun VoiceAiFullscreenOverlay(
                 )
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Text(
                 "Assistant",
-                color = Color(0xFFE0E2E8),
-                fontSize = 18.sp,
+                color = Color(0xFFE8EAEF),
+                fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            // Listening / transcription card
+            // Spoken text / status card — clearer typography and "Preparing…" instead of "Analyzing…"
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 28.dp),
-                shape = RoundedCornerShape(20.dp),
-                color = Color(0xFF1A1B22).copy(alpha = 0.85f),
+                    .padding(horizontal = 32.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = Color(0xFF1A1B22).copy(alpha = 0.9f),
                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2A2B35))
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 20.dp),
+                        .padding(horizontal = 20.dp, vertical = 18.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     AnimatedContent(
-                        targetState = if (isThinking) "thinking" else transcribedText,
-                        transitionSpec = { fadeIn(tween(400)) togetherWith fadeOut(tween(300)) },
+                        targetState = if (isThinking) "preparing" else transcribedText,
+                        transitionSpec = { fadeIn(tween(350)) togetherWith fadeOut(tween(250)) },
                         label = "overlayTranscription"
                     ) { text ->
                         when {
-                            text == "thinking" -> {
+                            text == "preparing" -> {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.Center,
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     CircularProgressIndicator(
-                                        modifier = Modifier.size(20.dp),
+                                        modifier = Modifier.size(18.dp),
                                         color = Color(0xFF7A8AE8),
-                                        strokeWidth = 2.dp
+                                        strokeWidth = 1.5.dp
                                     )
-                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Spacer(modifier = Modifier.width(10.dp))
                                     Text(
-                                        "Analyzing…",
-                                        color = Color(0xFFE0E2E8),
-                                        fontSize = 16.sp,
+                                        "Preparing…",
+                                        color = Color(0xFFB8BCC8),
+                                        fontSize = 15.sp,
                                         fontWeight = FontWeight.Medium
                                     )
                                 }
@@ -1677,10 +1736,10 @@ fun VoiceAiFullscreenOverlay(
                                         tint = Color(0xFF7A7E8E),
                                         modifier = Modifier.size(20.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Spacer(modifier = Modifier.width(12.dp))
                                     Text(
                                         text = if (text.isBlank()) "I'm listening…" else text,
-                                        color = if (text.isBlank()) Color(0xFF9A9EAC) else Color(0xFFE4E6EB),
+                                        color = if (text.isBlank()) Color(0xFF9A9EAC) else Color(0xFFE8EAEF),
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.Normal,
                                         lineHeight = 22.sp,

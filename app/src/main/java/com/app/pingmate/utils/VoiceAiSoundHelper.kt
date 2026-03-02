@@ -8,30 +8,29 @@ import android.os.Looper
 import android.util.Log
 
 /**
- * Plays short feedback sounds for Voice AI: when user taps to start listening,
- * and when speech ends and analysis starts.
+ * Plays short, pleasant feedback sounds for Voice AI (softer than system beeps).
  */
 object VoiceAiSoundHelper {
     private const val TAG = "VoiceAiSound"
-    private const val TONE_DURATION_MS = 180
+    private const val TONE_DURATION_MS = 120
 
-    /** Call when user taps AI assistant and listening is about to start. */
+    /** Short, soft tone when user taps AI assistant and listening is about to start. */
     fun playListeningStarted(context: Context) {
-        playTone(context, ToneGenerator.TONE_PROP_PROMPT)
+        playTone(context, ToneGenerator.TONE_PROP_PROMPT, 0.45f)
     }
 
-    /** Call when speech has ended and we are about to analyze (prompting/understanding starts). */
+    /** Gentle confirm when speech ended and we are about to analyze. */
     fun playProcessingStarted(context: Context) {
-        playTone(context, ToneGenerator.TONE_CDMA_CONFIRM)
+        playTone(context, ToneGenerator.TONE_CDMA_CONFIRM, 0.4f)
     }
 
-    private fun playTone(context: Context, toneType: Int) {
+    private fun playTone(context: Context, toneType: Int, volumeScale: Float = 0.5f) {
         try {
             val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-            val volume = audioManager?.getStreamVolume(AudioManager.STREAM_NOTIFICATION) ?: 5
+            val streamVol = audioManager?.getStreamVolume(AudioManager.STREAM_NOTIFICATION) ?: 5
             val maxVol = audioManager?.getStreamMaxVolume(AudioManager.STREAM_NOTIFICATION) ?: 7
-            val volumeRatio = if (maxVol > 0) volume.toFloat() / maxVol else 0.5f
-            val volumePct: Int = (volumeRatio * 100).toInt().coerceIn(1, 100)
+            val ratio = if (maxVol > 0) streamVol.toFloat() / maxVol else 0.5f
+            val volumePct = (ratio * volumeScale * 100).toInt().coerceIn(1, 80)
             val toneGen = ToneGenerator(AudioManager.STREAM_NOTIFICATION, volumePct)
             toneGen.startTone(toneType, TONE_DURATION_MS)
             Handler(Looper.getMainLooper()).postDelayed({
@@ -40,7 +39,7 @@ object VoiceAiSoundHelper {
                 } catch (e: Exception) {
                     Log.w(TAG, "ToneGenerator release: ${e.message}")
                 }
-            }, (TONE_DURATION_MS + 50).toLong())
+            }, (TONE_DURATION_MS + 80).toLong())
         } catch (e: Exception) {
             Log.w(TAG, "Play tone failed: ${e.message}")
         }

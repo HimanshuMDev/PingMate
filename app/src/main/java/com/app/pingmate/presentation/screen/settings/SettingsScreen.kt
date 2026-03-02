@@ -84,7 +84,7 @@ fun SettingsScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(CharcoalBackground, Color(0xFF0D0D14))))
+            .background(Brush.verticalGradient(listOf(Color(0xFF0A0A10), Color(0xFF0E0E18))))
     ) {
         Scaffold(
             containerColor = Color.Transparent,
@@ -93,8 +93,8 @@ fun SettingsScreen(
                     title = {
                         Text(
                             "Settings",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
                             color = TextPrimary
                         )
                     },
@@ -121,20 +121,20 @@ fun SettingsScreen(
                     .padding(padding)
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
                     text = "AI Configuration",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = TextMuted,
-                    letterSpacing = 0.5.sp
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = NotiBlue,
+                    letterSpacing = 1.2.sp
                 )
                 Surface(
-                    color = SurfaceDark,
-                    shape = RoundedCornerShape(14.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
+                    color = Color(0xFF0E0E1A),
+                    shape = RoundedCornerShape(18.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1F1F38)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
@@ -287,9 +287,9 @@ fun SettingsScreen(
                     letterSpacing = 0.5.sp
                 )
                 Surface(
-                    color = SurfaceDark,
-                    shape = RoundedCornerShape(14.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
+                    color = Color(0xFF0E0E1A),
+                    shape = RoundedCornerShape(18.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1F1F38)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { onNavigateToChooseApps() }
@@ -335,12 +335,12 @@ fun SettingsScreen(
                     letterSpacing = 0.5.sp
                 )
                 Surface(
-                    color = SurfaceDark,
-                    shape = RoundedCornerShape(14.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
+                    color = Color(0xFF0E0E1A),
+                    shape = RoundedCornerShape(18.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1F1F38)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
+                    Column(modifier = Modifier.padding(14.dp)) {
                         Text(
                             "Switch on to exclude an app's notifications from AI. They still appear in the list.",
                             fontSize = 11.sp,

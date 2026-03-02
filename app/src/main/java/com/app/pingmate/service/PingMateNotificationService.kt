@@ -105,7 +105,7 @@ class PingMateNotificationService : NotificationListenerService() {
                 val contentIntent = notification.notification.contentIntent
                 val notificationKey = notification.key
 
-                // Extract user profile / large icon (e.g. WhatsApp sender avatar from system notification)
+                // Extract user profile / large icon (WhatsApp, Instagram, etc. sender avatar)
                 val largeIconBase64: String? = try {
                     val notif = notification.notification
                     @Suppress("DEPRECATION")
@@ -114,9 +114,20 @@ class PingMateNotificationService : NotificationListenerService() {
                     ) ?: extras.getParcelable(android.app.Notification.EXTRA_LARGE_ICON)
                     if (bmp == null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
                         @Suppress("DEPRECATION")
-                        val fromNotif = notif.largeIcon
-                        if (fromNotif is android.graphics.Bitmap) {
-                            bmp = fromNotif
+                        val largeIcon = notif.largeIcon
+                        if (largeIcon is android.graphics.Bitmap) {
+                            bmp = largeIcon
+                        } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M && largeIcon != null) {
+                            val drawable = (largeIcon as? android.graphics.drawable.Icon)?.loadDrawable(applicationContext)
+                            bmp = drawable?.let { d ->
+                                val w = d.intrinsicWidth.coerceAtLeast(1)
+                                val h = d.intrinsicHeight.coerceAtLeast(1)
+                                val bitmap = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+                                val canvas = android.graphics.Canvas(bitmap)
+                                d.setBounds(0, 0, canvas.width, canvas.height)
+                                d.draw(canvas)
+                                bitmap
+                            }
                         }
                     }
                     bmp?.let { bitmap ->
@@ -129,14 +140,16 @@ class PingMateNotificationService : NotificationListenerService() {
                     null
                 }
 
-                // Extract big picture (e.g. BigPictureStyle / notification content image)
+                // Extract big picture (BigPictureStyle / notification content image)
                 val bigPictureBase64: String? = try {
                     @Suppress("DEPRECATION")
-                    val picture = extras.get(android.app.Notification.EXTRA_PICTURE)
-                    (picture as? android.graphics.Bitmap)?.let { bmp ->
+                    var picture = extras.get(android.app.Notification.EXTRA_PICTURE) as? android.graphics.Bitmap
+                    if (picture == null) picture = extras.get("android.bigPicture") as? android.graphics.Bitmap
+                    if (picture == null) picture = extras.get("android.largeIcon") as? android.graphics.Bitmap
+                    picture?.let { bmp ->
                         val stream = java.io.ByteArrayOutputStream()
                         bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 85, stream)
-                        android.util.Base64.encodeToString(stream.toByteArray(), android.util.Base64.DEFAULT)
+                        android.util.Base64.encodeToString(stream.toByteArray(), android.util.Base64.NO_WRAP)
                     }
                 } catch (e: Exception) {
                     Log.w("PingMateService", "Could not extract big picture: ${e.message}")

@@ -49,6 +49,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _aiResponse = MutableStateFlow<String?>(null)
     val aiResponse: StateFlow<String?> = _aiResponse.asStateFlow()
 
+    /** True while summarization/reminder is in progress; overlay shows "Preparing…" instead of harsh "Analyzing…". */
+    private val _isAiProcessing = MutableStateFlow(false)
+    val isAiProcessing: StateFlow<Boolean> = _isAiProcessing.asStateFlow()
+
     /** Date strip: Today, Yesterday, then past days. Built once and exposed. */
     val dateStripItems: List<DateStripItem> = buildDateStrip()
 
@@ -298,33 +302,71 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun clearAiState() {
         aiPromptJob?.cancel()
         aiPromptJob = null
+        _isAiProcessing.value = false
         speechRecognizerManager.clearTranscription()
         speechRecognizerManager.stopListening()
         _aiResponse.value = null
     }
 
-    /** Tries to parse "remind me at 2:30 pm" / "set reminder for 2:30 p.m."; returns (timeMillis, note) or null. */
+    /** High-accuracy reminder parsing: "remind me at 2:30 pm", "set reminder for tomorrow 3pm", "at 14:30", etc. */
     private fun parseReminderFromPrompt(prompt: String): Pair<Long, String>? {
-        val lower = prompt.trim().lowercase()
+        val trimmed = prompt.trim()
+        val lower = trimmed.lowercase()
         if (!lower.contains("remind") && !lower.contains("reminder")) return null
-        val timePattern = Regex("""(?:at|for|@)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?|(\d{1,2}):(\d{2})\s*(am|pm|a\.m\.|p\.m\.)?""", RegexOption.IGNORE_CASE)
-        val match = timePattern.find(lower) ?: return null
-        val (h1, m1, ap1, h2, m2, ap2) = match.destructured
-        val hourStr = h1.ifBlank { h2 }
-        val minStr = (m1.ifBlank { m2 }).ifBlank { "0" }
-        val amPm = ap1.ifBlank { ap2 }.lowercase()
-        var hour = hourStr.toIntOrNull() ?: return null
-        val minute = minStr.toIntOrNull() ?: 0
-        if (amPm.contains("p") && hour in 1..11) hour += 12
-        else if (amPm.contains("a") && hour == 12) hour = 0
-        else if (amPm.isBlank() && hour in 1..11) { /* assume current convention or 24h */ }
+
         val cal = Calendar.getInstance(Locale.getDefault())
-        cal.set(Calendar.HOUR_OF_DAY, hour)
-        cal.set(Calendar.MINUTE, minute)
         cal.set(Calendar.SECOND, 0)
         cal.set(Calendar.MILLISECOND, 0)
+
+        // Relative day: "tomorrow", "today"
+        if (lower.contains("tomorrow")) {
+            cal.add(Calendar.DAY_OF_MONTH, 1)
+        }
+
+        // Time patterns (flexible): "2:30 pm", "2:30pm", "14:30", "at 3 pm", "for 5:45 p.m.", "3 o'clock"
+        val patterns = listOf(
+            // at/for 1-12:30 am/pm
+            Regex("""(?:at|for|@)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?\b""", RegexOption.IGNORE_CASE),
+            // standalone 1-12:30 am/pm
+            Regex("""\b(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)\b""", RegexOption.IGNORE_CASE),
+            // 24h: 14:30, 9:00
+            Regex("""\b(\d{1,2}):(\d{2})\b""")
+        )
+        var hour: Int? = null
+        var minute = 0
+        for (regex in patterns) {
+            val match = regex.find(lower) ?: continue
+            val (hStr, mStr, amPm) = when (match.groupValues.size) {
+                4 -> Triple(match.groupValues[1], match.groupValues[2], match.groupValues[3])
+                3 -> Triple(match.groupValues[1], match.groupValues[2], "")
+                else -> continue
+            }
+            val h = hStr.toIntOrNull() ?: continue
+            val m = mStr.ifBlank { "0" }.toIntOrNull() ?: 0
+            val ap = amPm.lowercase()
+            when {
+                ap.contains("p") -> { hour = if (h in 1..11) h + 12 else h; minute = m }
+                ap.contains("a") -> { hour = if (h == 12) 0 else h; minute = m }
+                ap.isBlank() && regex == patterns[2] -> { hour = h; minute = m } // 24h
+                ap.isBlank() && h in 1..12 -> { hour = if (h == 12) 12 else h; minute = m } // assume PM for plain numbers
+                else -> { hour = h; minute = m }
+            }
+            if (hour != null) break
+        }
+        if (hour == null) {
+            // Fallback: any HH:MM or H:MM
+            val fallback = Regex("""(\d{1,2}):(\d{2})""").find(lower)
+            if (fallback != null) {
+                hour = fallback.groupValues[1].toIntOrNull() ?: return null
+                minute = fallback.groupValues[2].toIntOrNull() ?: 0
+                if (hour in 1..11) hour = hour!! + 12 // assume PM
+            } else return null
+        }
+        cal.set(Calendar.HOUR_OF_DAY, hour!!)
+        cal.set(Calendar.MINUTE, minute)
         if (cal.timeInMillis <= System.currentTimeMillis()) cal.add(Calendar.DAY_OF_MONTH, 1)
-        val note = prompt.replace(Regex("""(?i)(set\s+)?(a\s+)?reminder\s+(for|at)?\s*\d{1,2}(:\d{2})?\s*(am|pm|a\.m\.|p\.m\.)?"""), "").trim().take(200)
+        val note = trimmed.replace(Regex("""(?i)(set\s+)?(a\s+)?reminder\s+(for|at)?\s*(tomorrow\s+)?\d{1,2}(:\d{2})?\s*(am|pm|a\.m\.|p\.m\.)?"""), "")
+            .replace(Regex("""(?i)\b(remind\s+me\s+)?(at|for)\s*\d{1,2}(:\d{2})?\s*(am|pm|a\.m\.|p\.m\.)?"""), "").trim().take(200)
         return Pair(cal.timeInMillis, note)
     }
 
@@ -333,16 +375,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val reminderParsed = parseReminderFromPrompt(prompt)
         if (reminderParsed != null) {
             val (timeMillis, note) = reminderParsed
-            _aiResponse.value = "Setting reminder…"
+            _isAiProcessing.value = true
             aiPromptJob?.cancel()
             aiPromptJob = viewModelScope.launch(Dispatchers.IO) {
                 setGeneralReminder(timeMillis, note)
                 val timeStr = java.text.SimpleDateFormat("h:mm a", Locale.getDefault()).format(java.util.Date(timeMillis))
                 _aiResponse.value = "Reminder set for $timeStr. I'll remind you then."
+                _isAiProcessing.value = false
             }
             return
         }
-        _aiResponse.value = "Analyzing your notifications…"
+        _isAiProcessing.value = true
         com.app.pingmate.utils.VoiceAiSoundHelper.playProcessingStarted(getApplication())
         aiPromptJob?.cancel()
         aiPromptJob = viewModelScope.launch(Dispatchers.IO) {
@@ -355,6 +398,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 Log.e("PingMateAI", "ViewModel: summarize failed", e)
                 _aiResponse.value = "Something went wrong: ${e.message}. Check Logcat (filter: PingMateAI)."
             }
+            _isAiProcessing.value = false
         }
     }
 
