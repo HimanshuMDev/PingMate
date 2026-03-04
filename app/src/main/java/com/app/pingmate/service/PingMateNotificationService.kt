@@ -1,6 +1,10 @@
 package com.app.pingmate.service
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.Drawable
+import android.os.Build
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -106,58 +110,93 @@ class PingMateNotificationService : NotificationListenerService() {
                 val notificationKey = notification.key
 
                 // Extract user profile / large icon (WhatsApp, Instagram, etc. sender avatar)
+                // On Android 10+ extras often contain Icon, not Bitmap; and we must use Notification.largeIcon (Icon) and convert.
                 val largeIconBase64: String? = try {
                     val notif = notification.notification
+                    var bmp: Bitmap? = null
+
+                    // 1) Try Bitmap from extras (older apps / some OEMs)
                     @Suppress("DEPRECATION")
-                    var bmp: android.graphics.Bitmap? = extras.getParcelable(
-                        android.app.Notification.EXTRA_LARGE_ICON_BIG
-                    ) ?: extras.getParcelable(android.app.Notification.EXTRA_LARGE_ICON)
-                    if (bmp == null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                    bmp = extras.getParcelable(android.app.Notification.EXTRA_LARGE_ICON_BIG) as? Bitmap
+                        ?: extras.getParcelable(android.app.Notification.EXTRA_LARGE_ICON) as? Bitmap
+                    if (bmp == null) bmp = extras.get(android.app.Notification.EXTRA_LARGE_ICON) as? Bitmap
+                    if (bmp == null && Build.VERSION.SDK_INT >= 33) {
+                        bmp = extras.getParcelable(android.app.Notification.EXTRA_LARGE_ICON, Bitmap::class.java)
+                            ?: extras.getParcelable(android.app.Notification.EXTRA_LARGE_ICON_BIG, Bitmap::class.java)
+                    }
+
+                    // 2) Try Icon from extras (common on API 23+; extras may hold Icon, not Bitmap)
+                    if (bmp == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                         @Suppress("DEPRECATION")
-                        val largeIcon = notif.largeIcon
-                        if (largeIcon is android.graphics.Bitmap) {
-                            bmp = largeIcon
-                        } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M && largeIcon != null) {
-                            val drawable = (largeIcon as? android.graphics.drawable.Icon)?.loadDrawable(applicationContext)
-                            bmp = drawable?.let { d ->
-                                val w = d.intrinsicWidth.coerceAtLeast(1)
-                                val h = d.intrinsicHeight.coerceAtLeast(1)
-                                val bitmap = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
-                                val canvas = android.graphics.Canvas(bitmap)
-                                d.setBounds(0, 0, canvas.width, canvas.height)
-                                d.draw(canvas)
-                                bitmap
-                            }
+                        val iconFromExtras = extras.getParcelable(android.app.Notification.EXTRA_LARGE_ICON) as? android.graphics.drawable.Icon
+                            ?: extras.getParcelable(android.app.Notification.EXTRA_LARGE_ICON_BIG) as? android.graphics.drawable.Icon
+                        if (iconFromExtras != null) {
+                            bmp = iconToBitmap(iconFromExtras, applicationContext, packageName)
                         }
                     }
+                    if (Build.VERSION.SDK_INT >= 33) {
+                        val iconFromExtras = extras.getParcelable(android.app.Notification.EXTRA_LARGE_ICON, android.graphics.drawable.Icon::class.java)
+                            ?: extras.getParcelable(android.app.Notification.EXTRA_LARGE_ICON_BIG, android.graphics.drawable.Icon::class.java)
+                        if (bmp == null && iconFromExtras != null) {
+                            bmp = iconToBitmap(iconFromExtras, applicationContext, packageName)
+                        }
+                    }
+
+                    // 3) Primary: Notification.largeIcon (Icon) - most reliable on API 23+
+                    if (bmp == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        @Suppress("DEPRECATION")
+                        val largeIcon = notif.largeIcon
+                        if (largeIcon is Bitmap) {
+                            bmp = largeIcon
+                        } else if (largeIcon != null) {
+                            bmp = iconToBitmap(largeIcon as android.graphics.drawable.Icon, applicationContext, packageName)
+                        }
+                    }
+
                     bmp?.let { bitmap ->
                         val stream = java.io.ByteArrayOutputStream()
-                        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 85, stream)
+                        bitmap.compress(Bitmap.CompressFormat.PNG, 90, stream)
                         android.util.Base64.encodeToString(stream.toByteArray(), android.util.Base64.NO_WRAP)
                     }
                 } catch (e: Exception) {
-                    Log.w("PingMateService", "Could not extract largeIcon (user profile): ${e.message}")
+                    Log.w("PingMateService", "Could not extract largeIcon (user profile): ${e.message}", e)
                     null
                 }
 
-                // Extract big picture (BigPictureStyle / notification content image)
+                // Extract big picture (WhatsApp/email message images, BigPictureStyle, etc.)
                 val bigPictureBase64: String? = try {
+                    var picture: Bitmap? = null
+                    // Try all known keys (different OEMs/versions use different keys)
                     @Suppress("DEPRECATION")
-                    var picture = extras.get(android.app.Notification.EXTRA_PICTURE) as? android.graphics.Bitmap
-                    if (picture == null) picture = extras.get("android.bigPicture") as? android.graphics.Bitmap
-                    if (picture == null) picture = extras.get("android.largeIcon") as? android.graphics.Bitmap
+                    picture = extras.get(android.app.Notification.EXTRA_PICTURE) as? Bitmap
+                        ?: extras.get("android.bigPicture") as? Bitmap
+                        ?: extras.get("android.picture") as? Bitmap
+                        ?: extras.getParcelable(android.app.Notification.EXTRA_PICTURE) as? Bitmap
+                        ?: extras.getParcelable("android.bigPicture") as? Bitmap
+                    if (picture == null && Build.VERSION.SDK_INT >= 33) {
+                        picture = extras.getParcelable(android.app.Notification.EXTRA_PICTURE, Bitmap::class.java)
+                            ?: extras.getParcelable("android.bigPicture", Bitmap::class.java)
+                            ?: extras.getParcelable("android.picture", Bitmap::class.java)
+                    }
+                    // Do NOT use the profile/large icon as the content image – profile stays only in the avatar area
                     picture?.let { bmp ->
                         val stream = java.io.ByteArrayOutputStream()
-                        bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 85, stream)
+                        bmp.compress(Bitmap.CompressFormat.PNG, 90, stream)
                         android.util.Base64.encodeToString(stream.toByteArray(), android.util.Base64.NO_WRAP)
                     }
                 } catch (e: Exception) {
-                    Log.w("PingMateService", "Could not extract big picture: ${e.message}")
+                    Log.w("PingMateService", "Could not extract big picture: ${e.message}", e)
                     null
                 }
 
                 serviceScope.launch {
-                    val existing = db.notificationDao.getRecentNotification(packageName, title, text)
+                    // Prefer lookup by notificationKey to avoid saving the same system notification twice
+                    var existing = if (!notificationKey.isNullOrBlank()) {
+                        db.notificationDao.getByNotificationKey(notificationKey)
+                    } else null
+                    if (existing == null) {
+                        existing = db.notificationDao.getRecentNotification(packageName, title, text)
+                    }
                     if (existing != null) {
                         val updated = existing.copy(
                             timestamp = postTime,
@@ -193,5 +232,42 @@ class PingMateNotificationService : NotificationListenerService() {
         super.onNotificationRemoved(sbn)
         // We will keep notifications in our DB even if user clears them from the notification panel.
         // The DB is acting as an archive/feed that only auto-clears after 24 hrs.
+    }
+
+    /**
+     * Converts notification Icon (API 23+) to Bitmap. Tries applicationContext first, then package context
+     * so resource/URI icons from the notifying app can be loaded.
+     */
+    private fun iconToBitmap(
+        icon: android.graphics.drawable.Icon,
+        context: Context,
+        packageName: String?
+    ): Bitmap? {
+        var drawable: Drawable? = null
+        try {
+            drawable = icon.loadDrawable(context)
+        } catch (e: Exception) {
+            Log.v("PingMateService", "loadDrawable(appContext) failed: ${e.message}")
+        }
+        if (drawable == null && !packageName.isNullOrBlank()) {
+            try {
+                val pkgContext = context.createPackageContext(packageName, Context.CONTEXT_IGNORE_SECURITY)
+                drawable = icon.loadDrawable(pkgContext)
+            } catch (e: Exception) {
+                Log.v("PingMateService", "loadDrawable(packageContext) failed: ${e.message}")
+            }
+        }
+        val d = drawable ?: return null
+        var w = d.intrinsicWidth
+        var h = d.intrinsicHeight
+        if (w <= 0) w = 96
+        if (h <= 0) h = 96
+        w = w.coerceIn(1, 512)
+        h = h.coerceIn(1, 512)
+        val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        d.setBounds(0, 0, canvas.width, canvas.height)
+        d.draw(canvas)
+        return bitmap
     }
 }

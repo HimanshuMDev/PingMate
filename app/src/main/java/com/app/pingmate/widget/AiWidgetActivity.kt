@@ -9,9 +9,8 @@ import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
 import androidx.lifecycle.lifecycleScope
 import com.app.pingmate.data.local.PingMateDatabase
-import com.app.pingmate.data.local.entity.GeneralReminderEntity
-import com.app.pingmate.presentation.screen.dashboard.VoiceAiDialog
-import com.app.pingmate.presentation.screen.dashboard.VoiceAiFullscreenOverlay
+import com.app.pingmate.presentation.screen.dashboard.VoiceAssistantScreen
+import kotlinx.coroutines.delay
 import com.app.pingmate.ui.theme.PingMateTheme
 import com.app.pingmate.utils.OfflineSummarizationEngine
 import com.app.pingmate.utils.VoiceAiSoundHelper
@@ -20,34 +19,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import android.content.Intent
 import android.util.Log
-import java.util.Calendar
 import java.util.Locale
 
 private enum class WidgetPhase { LISTENING, PROCESSING, RESULT }
-
-/** Parse "remind me at 2:30 pm" / "set reminder for 2:30 p.m."; returns (timeMillis, note) or null. */
-private fun parseReminderFromPrompt(prompt: String): Pair<Long, String>? {
-    val lower = prompt.trim().lowercase()
-    if (!lower.contains("remind") && !lower.contains("reminder")) return null
-    val timePattern = Regex("""(?:at|for|@)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?|(\d{1,2}):(\d{2})\s*(am|pm|a\.m\.|p\.m\.)?""", RegexOption.IGNORE_CASE)
-    val match = timePattern.find(lower) ?: return null
-    val (h1, m1, ap1, h2, m2, ap2) = match.destructured
-    val hourStr = h1.ifBlank { h2 }
-    val minStr = (m1.ifBlank { m2 }).ifBlank { "0" }
-    val amPm = ap1.ifBlank { ap2 }.lowercase().trim()
-    var hour = hourStr.toIntOrNull() ?: return null
-    val minute = minStr.toIntOrNull() ?: 0
-    if (amPm.contains("p") && hour in 1..11) hour += 12
-    else if (amPm.contains("a") && hour == 12) hour = 0
-    val cal = Calendar.getInstance(Locale.getDefault())
-    cal.set(Calendar.HOUR_OF_DAY, hour)
-    cal.set(Calendar.MINUTE, minute)
-    cal.set(Calendar.SECOND, 0)
-    cal.set(Calendar.MILLISECOND, 0)
-    if (cal.timeInMillis <= System.currentTimeMillis()) cal.add(Calendar.DAY_OF_MONTH, 1)
-    val note = prompt.replace(Regex("""(?i)(set\s+)?(a\s+)?reminder\s+(for|at)?\s*\d{1,2}(:\d{2})?\s*(am|pm|a\.m\.|p\.m\.)?"""), "").trim().take(200)
-    return Pair(cal.timeInMillis, note)
-}
 
 class AiWidgetActivity : ComponentActivity() {
 
@@ -67,7 +41,7 @@ class AiWidgetActivity : ComponentActivity() {
         window.setBackgroundDrawableResource(android.R.color.transparent)
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             try {
-                val radiusPx = (48 * resources.displayMetrics.density).toInt().coerceIn(80, 200)
+                val radiusPx = (56 * resources.displayMetrics.density).toInt().coerceIn(80, 220)
                 window.setBackgroundBlurRadius(radiusPx)
             } catch (e: Exception) {
                 android.util.Log.w("AiWidgetActivity", "Window blur not available: ${e.message}")
@@ -83,25 +57,36 @@ class AiWidgetActivity : ComponentActivity() {
         setContent {
             PingMateTheme {
                 val currentState = state.value
-                when (currentState.phase) {
-                    WidgetPhase.LISTENING, WidgetPhase.PROCESSING -> {
-                        // Same overlay as in-app: Lottie + listening/transcription card
-                        LaunchedEffect(Unit) {
-                            if (currentState.phase == WidgetPhase.LISTENING) startListening(state)
-                        }
-                        VoiceAiFullscreenOverlay(
-                            transcribedText = currentState.transcribedText,
-                            isThinking = currentState.phase == WidgetPhase.PROCESSING,
-                            onDismiss = { finish() }
-                        )
-                    }
-                    WidgetPhase.RESULT -> {
-                        VoiceAiDialog(
-                            onDismissRequest = { finish() },
-                            transcribedText = currentState.transcribedText,
-                            aiResponse = currentState.aiResponse
-                        )
-                    }
+                VoiceAssistantScreen(
+                    transcribedText = currentState.transcribedText,
+                    isListening = currentState.phase == WidgetPhase.LISTENING,
+                    isProcessing = currentState.phase == WidgetPhase.PROCESSING,
+                    aiResponse = currentState.aiResponse,
+                    onStartListening = { startListening(state) },
+                    onProcessPrompt = { runSummarize(state, it) },
+                    onDismiss = { finish() }
+                )
+            }
+        }
+    }
+
+    private fun runSummarize(stateHolder: MutableState<WidgetAiState>, prompt: String) {
+        stateHolder.value = stateHolder.value.copy(phase = WidgetPhase.PROCESSING)
+        VoiceAiSoundHelper.playProcessingStarted(this)
+        processingJob?.cancel()
+        processingJob = lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val response = summarizationEngine.summarize(prompt)
+                withContext(Dispatchers.Main) {
+                    stateHolder.value = stateHolder.value.copy(phase = WidgetPhase.RESULT, aiResponse = response)
+                }
+            } catch (e: Exception) {
+                Log.e("AiWidgetActivity", "Summarize failed", e)
+                withContext(Dispatchers.Main) {
+                    stateHolder.value = stateHolder.value.copy(
+                        phase = WidgetPhase.RESULT,
+                        aiResponse = "Something went wrong: ${e.message}"
+                    )
                 }
             }
         }
@@ -158,58 +143,6 @@ class AiWidgetActivity : ComponentActivity() {
                         phase = WidgetPhase.PROCESSING,
                         transcribedText = text
                     )
-                    VoiceAiSoundHelper.playProcessingStarted(this@AiWidgetActivity)
-                    val reminderParsed = parseReminderFromPrompt(text)
-                    processingJob?.cancel()
-                    processingJob = lifecycleScope.launch(Dispatchers.IO) {
-                        try {
-                            val response = if (reminderParsed != null) {
-                                val (timeMillis, note) = reminderParsed
-                                val db = PingMateDatabase.getInstance(this@AiWidgetActivity)
-                                val entity = GeneralReminderEntity(reminderTimeMillis = timeMillis, note = note)
-                                val id = db.generalReminderDao.insert(entity).toInt()
-                                val alarmManager = getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
-                                val intent = android.content.Intent(this@AiWidgetActivity, com.app.pingmate.receiver.ReminderReceiver::class.java).apply {
-                                    putExtra("EXTRA_TITLE", "PingMate Reminder")
-                                    putExtra("EXTRA_MESSAGE", note.ifBlank { "You have a scheduled reminder" })
-                                    putExtra("EXTRA_GENERAL_REMINDER_ID", id)
-                                }
-                                val pendingIntent = android.app.PendingIntent.getBroadcast(
-                                    this@AiWidgetActivity,
-                                    com.app.pingmate.receiver.ReminderReceiver.REQUEST_CODE_GENERAL_BASE + id,
-                                    intent,
-                                    android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
-                                )
-                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                                    if (alarmManager.canScheduleExactAlarms()) {
-                                        alarmManager.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, timeMillis, pendingIntent)
-                                    } else {
-                                        alarmManager.setAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, timeMillis, pendingIntent)
-                                    }
-                                } else {
-                                    alarmManager.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, timeMillis, pendingIntent)
-                                }
-                                val timeStr = java.text.SimpleDateFormat("h:mm a", Locale.getDefault()).format(java.util.Date(timeMillis))
-                                "Reminder set for $timeStr. I'll remind you then."
-                            } else {
-                                summarizationEngine.summarize(text)
-                            }
-                            withContext(Dispatchers.Main) {
-                                stateHolder.value = stateHolder.value.copy(
-                                    phase = WidgetPhase.RESULT,
-                                    aiResponse = response
-                                )
-                            }
-                        } catch (e: Exception) {
-                            Log.e("AiWidgetActivity", "Summarize failed", e)
-                            withContext(Dispatchers.Main) {
-                                stateHolder.value = stateHolder.value.copy(
-                                    phase = WidgetPhase.RESULT,
-                                    aiResponse = "Something went wrong: ${e.message}"
-                                )
-                            }
-                        }
-                    }
                 }
             }
             override fun onPartialResults(partialResults: Bundle?) {

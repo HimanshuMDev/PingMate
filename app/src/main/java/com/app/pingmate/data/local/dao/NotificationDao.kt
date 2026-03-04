@@ -8,6 +8,8 @@ import androidx.room.Update
 import com.app.pingmate.data.local.entity.NotificationEntity
 import kotlinx.coroutines.flow.Flow
 
+data class PackageWithCount(val packageName: String, val count: Int)
+
 @Dao
 interface NotificationDao {
 
@@ -47,6 +49,25 @@ interface NotificationDao {
     @Query("SELECT * FROM notifications WHERE packageName = :pkgName AND title = :title AND content = :content ORDER BY timestamp DESC LIMIT 1")
     suspend fun getRecentNotification(pkgName: String, title: String, content: String): NotificationEntity?
 
+    @Query("SELECT * FROM notifications WHERE notificationKey = :notificationKey LIMIT 1")
+    suspend fun getByNotificationKey(notificationKey: String): NotificationEntity?
+
+    @Query("""
+        SELECT COUNT(*) FROM notifications
+        WHERE (:pkgName IS NULL OR packageName = :pkgName)
+        AND (:isFavorite IS NULL OR isFavorite = :isFavorite)
+        AND (:dateStart IS NULL OR timestamp >= :dateStart)
+        AND (:dateEnd IS NULL OR timestamp < :dateEnd)
+        AND (:search IS NULL OR :search = '' OR title LIKE '%' || :search || '%' OR content LIKE '%' || :search || '%')
+    """)
+    suspend fun getNotificationCount(
+        pkgName: String?,
+        isFavorite: Boolean?,
+        dateStart: Long?,
+        dateEnd: Long?,
+        search: String?
+    ): Int
+
     @Update
     suspend fun updateNotification(notification: NotificationEntity)
 
@@ -59,4 +80,10 @@ interface NotificationDao {
     
     @Query("DELETE FROM notifications")
     suspend fun clearAll()
+
+    @Query("SELECT packageName, COUNT(*) as count FROM notifications GROUP BY packageName ORDER BY count DESC")
+    suspend fun getPackageNamesWithCounts(): List<PackageWithCount>
+
+    @Query("DELETE FROM notifications WHERE packageName = :packageName")
+    suspend fun deleteByPackageName(packageName: String)
 }

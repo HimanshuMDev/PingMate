@@ -28,14 +28,14 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.NotiFlowAI"
+        android:theme="@style/Theme.PingMate"
         tools:targetApi="31">
 
         <!-- ===== MAIN ACTIVITY ===== -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.NotiFlowAI.Splash"
+            android:theme="@style/Theme.PingMate.Splash"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -61,7 +61,7 @@
         <activity
             android:name=".widget.AiWidgetActivity"
             android:exported="false"
-            android:theme="@style/Theme.NotiFlowAI.Transparent"
+            android:theme="@style/Theme.PingMate.Transparent"
             android:windowSoftInputMode="adjustResize"
             android:excludeFromRecents="true"
             android:taskAffinity=""

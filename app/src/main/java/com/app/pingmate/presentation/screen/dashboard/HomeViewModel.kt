@@ -9,11 +9,13 @@ import com.app.pingmate.data.local.entity.NotificationEntity
 import com.app.pingmate.utils.NotificationIntentCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
@@ -35,6 +37,8 @@ sealed class ReminderItem {
     data class GeneralReminder(val entity: GeneralReminderEntity) : ReminderItem()
 }
 
+data class ParsedReminder(val timeMillis: Long, val note: String)
+
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val db = PingMateDatabase.getInstance(application)
@@ -49,9 +53,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _aiResponse = MutableStateFlow<String?>(null)
     val aiResponse: StateFlow<String?> = _aiResponse.asStateFlow()
 
+    /** Prompt that was sent for the current/last AI result (e.g. after user edited and tapped Summarize). */
+    private val _lastAiPrompt = MutableStateFlow<String?>(null)
+    val lastAiPrompt: StateFlow<String?> = _lastAiPrompt.asStateFlow()
+
     /** True while summarization/reminder is in progress; overlay shows "Preparing…" instead of harsh "Analyzing…". */
     private val _isAiProcessing = MutableStateFlow(false)
     val isAiProcessing: StateFlow<Boolean> = _isAiProcessing.asStateFlow()
+
+    private val _pendingAiReminder = MutableStateFlow<ParsedReminder?>(null)
+    val pendingAiReminder: StateFlow<ParsedReminder?> = _pendingAiReminder.asStateFlow()
 
     /** Date strip: Today, Yesterday, then past days. Built once and exposed. */
     val dateStripItems: List<DateStripItem> = buildDateStrip()
@@ -122,6 +133,28 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }.flow
     }.cachedIn(viewModelScope)
 
+    /** Total notification count for current filter (date, app, search). Updates when filters change. */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val notificationCount: StateFlow<Int> = combine(
+        _selectedDateStartMillis,
+        _searchQuery,
+        _selectedPackageName
+    ) { dateMillis, query, pkg ->
+        Triple(dateMillis, query, pkg)
+    }.flatMapLatest { triple ->
+        flow {
+            val (dateMillis, query, pkg) = triple
+            val isFav = if (pkg == "FAVORITES") true else null
+            val actualPkg = if (pkg == "FAVORITES" || pkg == "All" || pkg == "REMINDERS") null else pkg
+            val dateStart = dateMillis
+            val dateEnd = dateMillis?.let { getEndOfDayMillis(it) }
+            val search = query.ifBlank { null }
+            val count = withContext(Dispatchers.IO) {
+                notificationDao.getNotificationCount(actualPkg, isFav, dateStart, dateEnd, search)
+            }
+            emit(count)
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     private fun buildDateStrip(): List<DateStripItem> {
         val cal = Calendar.getInstance(Locale.getDefault())
@@ -306,85 +339,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         speechRecognizerManager.clearTranscription()
         speechRecognizerManager.stopListening()
         _aiResponse.value = null
+        _lastAiPrompt.value = null
+        _pendingAiReminder.value = null
     }
 
-    /** High-accuracy reminder parsing: "remind me at 2:30 pm", "set reminder for tomorrow 3pm", "at 14:30", etc. */
-    private fun parseReminderFromPrompt(prompt: String): Pair<Long, String>? {
-        val trimmed = prompt.trim()
-        val lower = trimmed.lowercase()
-        if (!lower.contains("remind") && !lower.contains("reminder")) return null
-
-        val cal = Calendar.getInstance(Locale.getDefault())
-        cal.set(Calendar.SECOND, 0)
-        cal.set(Calendar.MILLISECOND, 0)
-
-        // Relative day: "tomorrow", "today"
-        if (lower.contains("tomorrow")) {
-            cal.add(Calendar.DAY_OF_MONTH, 1)
-        }
-
-        // Time patterns (flexible): "2:30 pm", "2:30pm", "14:30", "at 3 pm", "for 5:45 p.m.", "3 o'clock"
-        val patterns = listOf(
-            // at/for 1-12:30 am/pm
-            Regex("""(?:at|for|@)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?\b""", RegexOption.IGNORE_CASE),
-            // standalone 1-12:30 am/pm
-            Regex("""\b(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)\b""", RegexOption.IGNORE_CASE),
-            // 24h: 14:30, 9:00
-            Regex("""\b(\d{1,2}):(\d{2})\b""")
-        )
-        var hour: Int? = null
-        var minute = 0
-        for (regex in patterns) {
-            val match = regex.find(lower) ?: continue
-            val (hStr, mStr, amPm) = when (match.groupValues.size) {
-                4 -> Triple(match.groupValues[1], match.groupValues[2], match.groupValues[3])
-                3 -> Triple(match.groupValues[1], match.groupValues[2], "")
-                else -> continue
-            }
-            val h = hStr.toIntOrNull() ?: continue
-            val m = mStr.ifBlank { "0" }.toIntOrNull() ?: 0
-            val ap = amPm.lowercase()
-            when {
-                ap.contains("p") -> { hour = if (h in 1..11) h + 12 else h; minute = m }
-                ap.contains("a") -> { hour = if (h == 12) 0 else h; minute = m }
-                ap.isBlank() && regex == patterns[2] -> { hour = h; minute = m } // 24h
-                ap.isBlank() && h in 1..12 -> { hour = if (h == 12) 12 else h; minute = m } // assume PM for plain numbers
-                else -> { hour = h; minute = m }
-            }
-            if (hour != null) break
-        }
-        if (hour == null) {
-            // Fallback: any HH:MM or H:MM
-            val fallback = Regex("""(\d{1,2}):(\d{2})""").find(lower)
-            if (fallback != null) {
-                hour = fallback.groupValues[1].toIntOrNull() ?: return null
-                minute = fallback.groupValues[2].toIntOrNull() ?: 0
-                if (hour in 1..11) hour = hour!! + 12 // assume PM
-            } else return null
-        }
-        cal.set(Calendar.HOUR_OF_DAY, hour!!)
-        cal.set(Calendar.MINUTE, minute)
-        if (cal.timeInMillis <= System.currentTimeMillis()) cal.add(Calendar.DAY_OF_MONTH, 1)
-        val note = trimmed.replace(Regex("""(?i)(set\s+)?(a\s+)?reminder\s+(for|at)?\s*(tomorrow\s+)?\d{1,2}(:\d{2})?\s*(am|pm|a\.m\.|p\.m\.)?"""), "")
-            .replace(Regex("""(?i)\b(remind\s+me\s+)?(at|for)\s*\d{1,2}(:\d{2})?\s*(am|pm|a\.m\.|p\.m\.)?"""), "").trim().take(200)
-        return Pair(cal.timeInMillis, note)
+    fun clearPendingReminder() {
+        _pendingAiReminder.value = null
     }
 
     fun processAiPrompt(prompt: String) {
         if (prompt.isBlank()) return
-        val reminderParsed = parseReminderFromPrompt(prompt)
-        if (reminderParsed != null) {
-            val (timeMillis, note) = reminderParsed
-            _isAiProcessing.value = true
-            aiPromptJob?.cancel()
-            aiPromptJob = viewModelScope.launch(Dispatchers.IO) {
-                setGeneralReminder(timeMillis, note)
-                val timeStr = java.text.SimpleDateFormat("h:mm a", Locale.getDefault()).format(java.util.Date(timeMillis))
-                _aiResponse.value = "Reminder set for $timeStr. I'll remind you then."
-                _isAiProcessing.value = false
-            }
-            return
-        }
+        _lastAiPrompt.value = prompt.trim()
         _isAiProcessing.value = true
         com.app.pingmate.utils.VoiceAiSoundHelper.playProcessingStarted(getApplication())
         aiPromptJob?.cancel()

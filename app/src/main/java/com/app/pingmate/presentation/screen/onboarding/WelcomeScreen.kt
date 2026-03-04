@@ -205,8 +205,8 @@ fun WelcomeScreen(
                 WelcomeFeatureRow(
                     icon = Icons.Default.AutoAwesome,
                     iconTint = NotiBlue,
-                    title = "AI-Powered Summaries",
-                    subtitle = "Instantly condense any app's notifications using on-device AI."
+                    title = "Powered by Gemini AI",
+                    subtitle = "Smart summaries in real time. Requires internet connection."
                 )
                 WelcomeFeatureRow(
                     icon = Icons.Default.Notifications,

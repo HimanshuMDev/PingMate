@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Transparent overlay with blur behind (API 31+) for widget AI activity -->
-    <style name="Theme.NotiFlowAI.Transparent" parent="Theme.NotiFlowAI">
+    <!-- Transparent overlay with blur behind (API 31+) for widget AI activity; smooth open/close -->
+    <style name="Theme.PingMate.Transparent" parent="Theme.PingMate">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowContentOverlay">@null</item>
@@ -9,5 +9,6 @@
         <item name="android:backgroundDimEnabled">false</item>
         <item name="android:windowBlurBehindEnabled">true</item>
         <item name="android:windowBlurBehindRadius">48dp</item>
+        <item name="android:windowAnimationStyle">@style/WidgetActivityAnimation</item>
     </style>
 </resources>

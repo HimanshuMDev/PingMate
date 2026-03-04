@@ -1,15 +1,18 @@
 package com.app.pingmate.presentation.screen.settings
 
 import android.content.Context
-import android.util.Log
+import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,8 +24,10 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -39,9 +44,15 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.app.pingmate.data.local.PingMateDatabase
+import com.app.pingmate.data.local.dao.NotificationDao
 import com.app.pingmate.ui.theme.*
 import com.app.pingmate.utils.OfflineSummarizationEngine
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -52,15 +63,41 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val prefs = remember {
-        context.getSharedPreferences(OfflineSummarizationEngine.PREFS_NAME, Context.MODE_PRIVATE)
+        context.applicationContext.getSharedPreferences("PingMatePrefs", Context.MODE_PRIVATE)
     }
-    var apiKey by remember { mutableStateOf(prefs.getString(OfflineSummarizationEngine.KEY_GEMINI_API, "") ?: "") }
-    var saved by remember { mutableStateOf(false) }
-    var keyVisible by remember { mutableStateOf(false) }
 
     var trackedAppsForAi by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
     var aiExcludedSet by remember { mutableStateOf<Set<String>>(OfflineSummarizationEngine.getAiExcludedPackages(context)) }
     var isLoadingTrackedApps by remember { mutableStateOf(true) }
+    var geminiApiKey by remember { mutableStateOf(prefs.getString(OfflineSummarizationEngine.KEY_GEMINI_API_KEY, "") ?: "") }
+    var geminiKeyVisible by remember { mutableStateOf(false) }
+    var showClearMessagesDialog by remember { mutableStateOf(false) }
+    var clearDialogAppList by remember { mutableStateOf<List<Triple<String, String, Int>>>(emptyList()) }
+    var isLoadingClearList by remember { mutableStateOf(false) }
+    var confirmClearPackage by remember { mutableStateOf<String?>(null) }
+    var confirmClearAll by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val notificationDao = remember { PingMateDatabase.getInstance(context.applicationContext).notificationDao }
+
+    LaunchedEffect(showClearMessagesDialog) {
+        if (showClearMessagesDialog) {
+            isLoadingClearList = true
+            clearDialogAppList = withContext(Dispatchers.IO) {
+                val counts = notificationDao.getPackageNamesWithCounts()
+                val pm = context.packageManager
+                counts.mapNotNull { (pkg, count) ->
+                    try {
+                        val info = pm.getApplicationInfo(pkg, 0)
+                        Triple(pkg, pm.getApplicationLabel(info).toString(), count)
+                    } catch (e: Exception) {
+                        Triple(pkg, pkg, count)
+                    }
+                }
+            }
+            isLoadingClearList = false
+        }
+    }
+
     LaunchedEffect(Unit) {
         val (list, excluded) = withContext(Dispatchers.IO) {
             val tracked = prefs.getStringSet("tracked_apps", emptySet()) ?: emptySet()
@@ -125,11 +162,11 @@ fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    text = "AI Configuration",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = NotiBlue,
-                    letterSpacing = 1.2.sp
+                    text = "Gemini API",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextMuted,
+                    letterSpacing = 0.5.sp
                 )
                 Surface(
                     color = Color(0xFF0E0E1A),
@@ -137,147 +174,69 @@ fun SettingsScreen(
                     border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1F1F38)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .background(NotiBlue.copy(alpha = 0.15f), CircleShape),
-                            contentAlignment = Alignment.Center
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.AutoAwesome, null, tint = NotiBlue, modifier = Modifier.size(20.dp))
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                "Gemini API Key",
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 14.sp,
-                                color = TextPrimary
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                "Add your API key from Google AI Studio for voice summaries.",
-                                fontSize = 12.sp,
-                                color = TextMuted,
-                                lineHeight = 16.sp
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Surface(
-                                color = NotiBlue.copy(alpha = 0.12f),
-                                shape = RoundedCornerShape(6.dp)
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .background(SurfaceVariant.copy(alpha = 0.5f), CircleShape),
+                                contentAlignment = Alignment.Center
                             ) {
+                                Icon(Icons.Filled.Key, null, tint = NotiBlue, modifier = Modifier.size(20.dp))
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    "aistudio.google.com",
-                                    fontSize = 10.sp,
-                                    color = NotiBlue,
-                                    fontWeight = FontWeight.Medium,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    "Gemini API Key",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp,
+                                    color = TextPrimary
+                                )
+                                Text(
+                                    "Paste your key from aistudio.google.com/apikey. Used for AI summaries.",
+                                    fontSize = 11.sp,
+                                    color = TextMuted,
+                                    lineHeight = 14.sp
                                 )
                             }
                         }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = geminiApiKey,
+                            onValueChange = { geminiApiKey = it; prefs.edit().putString(OfflineSummarizationEngine.KEY_GEMINI_API_KEY, it).apply() },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text("Paste your Gemini API key", color = TextMuted, fontSize = 14.sp) },
+                            visualTransformation = if (geminiKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(14.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = NotiBlue.copy(alpha = 0.5f),
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.1f),
+                                focusedContainerColor = Color(0xFF16161E),
+                                unfocusedContainerColor = Color(0xFF16161E),
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                cursorColor = NotiBlue
+                            ),
+                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp),
+                            trailingIcon = {
+                                IconButton(onClick = { geminiKeyVisible = !geminiKeyVisible }) {
+                                    Icon(
+                                        if (geminiKeyVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                        contentDescription = if (geminiKeyVisible) "Hide key" else "Show key",
+                                        tint = TextMuted,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        )
                     }
                 }
 
-                Surface(
-                    color = SurfaceDark,
-                    shape = RoundedCornerShape(14.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Text(
-                            "API key",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = TextMuted,
-                            letterSpacing = 0.5.sp
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = apiKey,
-                            onValueChange = { apiKey = it; saved = false },
-                            modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text("Paste your Gemini API key", color = TextHint, fontSize = 13.sp) },
-                            leadingIcon = {
-                                Icon(Icons.Default.Key, null, tint = TextMuted, modifier = Modifier.size(18.dp))
-                            },
-                            trailingIcon = {
-                                IconButton(onClick = { keyVisible = !keyVisible }) {
-                                    Icon(
-                                        if (keyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                        null, tint = TextMuted, modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            },
-                            visualTransformation = if (keyVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = TextPrimary,
-                                unfocusedTextColor = TextPrimary,
-                                cursorColor = NotiBlue,
-                                focusedBorderColor = NotiBlue,
-                                unfocusedBorderColor = BorderSubtle,
-                                focusedContainerColor = CharcoalBackground,
-                                unfocusedContainerColor = CharcoalBackground
-                            ),
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Button(
-                            onClick = {
-                                val trimmed = apiKey.trim()
-                                prefs.edit().putString(OfflineSummarizationEngine.KEY_GEMINI_API, trimmed).commit()
-                                Log.d("PingMateAI", "API key saved, len=${trimmed.length}")
-                                saved = true
-                            },
-                            modifier = Modifier.fillMaxWidth().height(44.dp),
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = NotiBlue)
-                        ) {
-                            AnimatedContent(
-                                targetState = saved,
-                                transitionSpec = { fadeIn(tween(150)) togetherWith fadeOut(tween(100)) },
-                                label = "saveState"
-                            ) { isSaved ->
-                                if (isSaved) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.Check, null, tint = TextPrimary, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Saved", color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                                    }
-                                } else {
-                                    Text("Save API key", color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                                }
-                            }
-                        }
-                        AnimatedContent(
-                            targetState = saved,
-                            transitionSpec = { fadeIn(tween(150)) togetherWith fadeOut(tween(100)) },
-                            label = "savedMsg"
-                        ) { isSaved ->
-                            if (isSaved) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    Icon(Icons.Default.Check, null, tint = SuccessGreen, modifier = Modifier.size(14.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        "Saved · ${apiKey.trim().length} characters",
-                                        fontSize = 11.sp,
-                                        color = SuccessGreen,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                            } else {
-                                Spacer(modifier = Modifier.height(0.dp))
-                            }
-                        }
-                    }
-                }
+                Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
                     text = "Apps & privacy",
@@ -408,13 +367,366 @@ fun SettingsScreen(
                 }
 
                 Text(
-                    text = "API key is stored only on this device.",
-                    fontSize = 10.sp,
-                    color = TextHint,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 14.sp,
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                    text = "Clear messages",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextMuted,
+                    letterSpacing = 0.5.sp
                 )
+                Surface(
+                    color = Color(0xFF0E0E1A),
+                    shape = RoundedCornerShape(18.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1F1F38)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showClearMessagesDialog = true }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(SurfaceVariant.copy(alpha = 0.5f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Filled.DeleteSweep, null, tint = NotiBlue, modifier = Modifier.size(20.dp))
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Clear messages",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp,
+                                color = TextPrimary
+                            )
+                            Text(
+                                "Clear by app or clear all notifications",
+                                fontSize = 11.sp,
+                                color = TextMuted,
+                                lineHeight = 14.sp
+                            )
+                        }
+                        Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = TextMuted, modifier = Modifier.size(20.dp))
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+        }
+
+        if (showClearMessagesDialog) {
+            Dialog(
+                onDismissRequest = { showClearMessagesDialog = false },
+                properties = DialogProperties(usePlatformDefaultWidth = false)
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth(0.92f)
+                        .wrapContentHeight()
+                        .heightIn(max = 560.dp),
+                    shape = RoundedCornerShape(32.dp),
+                    color = Color(0xFF0F0F16),
+                    border = BorderStroke(
+                        1.dp,
+                        Brush.linearGradient(listOf(NotiBlue.copy(alpha = 0.3f), Color.White.copy(alpha = 0.05f)))
+                    ),
+                    shadowElevation = 16.dp
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .background(NotiBlue.copy(alpha = 0.1f), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Filled.DeleteSweep, null, tint = NotiBlue, modifier = Modifier.size(18.dp))
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    "Clear messages",
+                                    color = TextPrimary,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            IconButton(onClick = { showClearMessagesDialog = false }, modifier = Modifier.size(40.dp)) {
+                                Icon(Icons.Default.Close, null, tint = TextMuted, modifier = Modifier.size(20.dp))
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        if (isLoadingClearList) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 32.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 2.dp, color = NotiBlue)
+                            }
+                        } else if (clearDialogAppList.isEmpty()) {
+                            Text(
+                                "No messages to clear.",
+                                color = TextMuted,
+                                fontSize = 14.sp,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 24.dp),
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(24.dp))
+                            Button(
+                                onClick = { showClearMessagesDialog = false },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(50.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = NotiBlue),
+                                shape = RoundedCornerShape(16.dp),
+                                elevation = ButtonDefaults.buttonElevation(0.dp)
+                            ) {
+                                Text("Done", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        } else {
+                            Text(
+                                "Tap an app to clear its messages, or clear all below.",
+                                color = TextMuted,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(bottom = 12.dp)
+                            )
+                            LazyColumn(
+                                modifier = Modifier.heightIn(max = 280.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(clearDialogAppList) { (pkg, appName, count) ->
+                                    Surface(
+                                        color = Color(0xFF1A1A24),
+                                        shape = RoundedCornerShape(16.dp),
+                                        border = BorderStroke(1.dp, BorderSubtle),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { confirmClearPackage = pkg }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(14.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            AndroidView(
+                                                factory = { ctx ->
+                                                    android.widget.ImageView(ctx).apply {
+                                                        try {
+                                                            setImageDrawable(ctx.packageManager.getApplicationIcon(pkg))
+                                                        } catch (_: Exception) {
+                                                            setImageDrawable(ctx.getDrawable(android.R.drawable.sym_def_app_icon))
+                                                        }
+                                                        clipToOutline = true
+                                                    }
+                                                },
+                                                modifier = Modifier.size(44.dp).clip(CircleShape),
+                                                update = { iv ->
+                                                    try {
+                                                        iv.setImageDrawable(iv.context.packageManager.getApplicationIcon(pkg))
+                                                    } catch (_: Exception) {
+                                                        iv.setImageDrawable(iv.context.getDrawable(android.R.drawable.sym_def_app_icon))
+                                                    }
+                                                }
+                                            )
+                                            Spacer(modifier = Modifier.width(14.dp))
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(appName, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                                                Text("$count message${if (count == 1) "" else "s"}", fontSize = 12.sp, color = TextMuted)
+                                            }
+                                            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = TextMuted, modifier = Modifier.size(20.dp))
+                                        }
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Surface(
+                                onClick = { confirmClearAll = true },
+                                color = UrgentRedDim.copy(alpha = 0.6f),
+                                shape = RoundedCornerShape(16.dp),
+                                border = BorderStroke(1.dp, UrgentRed.copy(alpha = 0.5f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(Icons.Filled.DeleteSweep, contentDescription = null, tint = UrgentRed, modifier = Modifier.size(20.dp))
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text("Clear all messages", color = UrgentRed, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(
+                                onClick = { showClearMessagesDialog = false },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(50.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = NotiBlue),
+                                shape = RoundedCornerShape(16.dp),
+                                elevation = ButtonDefaults.buttonElevation(0.dp)
+                            ) {
+                                Text("Done", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        confirmClearPackage?.let { pkg ->
+            val item = clearDialogAppList.find { it.first == pkg }
+            val appName = item?.second ?: pkg
+            val count = item?.third ?: 0
+            Dialog(
+                onDismissRequest = { confirmClearPackage = null },
+                properties = DialogProperties(usePlatformDefaultWidth = false)
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth(0.88f)
+                        .wrapContentHeight(),
+                    shape = RoundedCornerShape(28.dp),
+                    color = Color(0xFF0F0F16),
+                    border = BorderStroke(
+                        1.dp,
+                        Brush.linearGradient(listOf(UrgentRed.copy(alpha = 0.25f), Color.White.copy(alpha = 0.05f)))
+                    ),
+                    shadowElevation = 16.dp
+                ) {
+                    Column(modifier = Modifier.padding(24.dp)) {
+                        Text(
+                            "Clear messages?",
+                            color = TextPrimary,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            "Clear $count message${if (count == 1) "" else "s"} from $appName? This cannot be undone.",
+                            color = TextSecondary,
+                            fontSize = 14.sp,
+                            lineHeight = 20.sp
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = { confirmClearPackage = null },
+                                modifier = Modifier.weight(1f).height(48.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextMuted),
+                                border = BorderStroke(1.dp, BorderSubtle)
+                            ) {
+                                Text("Cancel", fontWeight = FontWeight.Medium)
+                            }
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        withContext(Dispatchers.IO) { notificationDao.deleteByPackageName(pkg) }
+                                        clearDialogAppList = clearDialogAppList.filter { it.first != pkg }
+                                        confirmClearPackage = null
+                                        if (clearDialogAppList.isEmpty()) showClearMessagesDialog = false
+                                        Toast.makeText(context, "Cleared messages from $appName", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                modifier = Modifier.weight(1f).height(48.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = UrgentRed),
+                                shape = RoundedCornerShape(14.dp),
+                                elevation = ButtonDefaults.buttonElevation(0.dp)
+                            ) {
+                                Text("Clear", color = Color.White, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (confirmClearAll) {
+            Dialog(
+                onDismissRequest = { confirmClearAll = false },
+                properties = DialogProperties(usePlatformDefaultWidth = false)
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth(0.88f)
+                        .wrapContentHeight(),
+                    shape = RoundedCornerShape(28.dp),
+                    color = Color(0xFF0F0F16),
+                    border = BorderStroke(
+                        1.dp,
+                        Brush.linearGradient(listOf(UrgentRed.copy(alpha = 0.25f), Color.White.copy(alpha = 0.05f)))
+                    ),
+                    shadowElevation = 16.dp
+                ) {
+                    Column(modifier = Modifier.padding(24.dp)) {
+                        Text(
+                            "Clear all messages?",
+                            color = TextPrimary,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            "This will delete all notifications. This cannot be undone.",
+                            color = TextSecondary,
+                            fontSize = 14.sp,
+                            lineHeight = 20.sp
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = { confirmClearAll = false },
+                                modifier = Modifier.weight(1f).height(48.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextMuted),
+                                border = BorderStroke(1.dp, BorderSubtle)
+                            ) {
+                                Text("Cancel", fontWeight = FontWeight.Medium)
+                            }
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        withContext(Dispatchers.IO) { notificationDao.clearAll() }
+                                        confirmClearAll = false
+                                        showClearMessagesDialog = false
+                                        clearDialogAppList = emptyList()
+                                        Toast.makeText(context, "All messages cleared", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                modifier = Modifier.weight(1f).height(48.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = UrgentRed),
+                                shape = RoundedCornerShape(14.dp),
+                                elevation = ButtonDefaults.buttonElevation(0.dp)
+                            ) {
+                                Text("Clear all", color = Color.White, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                }
             }
         }
     }
