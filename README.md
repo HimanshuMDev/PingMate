@@ -2,7 +2,7 @@
 
 <img src="app/src/main/ic_launcher-playstore.png" alt="PingMate Logo" width="160" />
 
-# ⚡ PingMate (NotiFlow AI)
+# ⚡ PingMate
 
 **Your Intelligent, Privacy-First Notification Hub**
 
@@ -15,21 +15,11 @@
 _One unified feed. AI-powered summaries. Smart reminders. Zero accounts required._ <br>
 _Reclaim your focus by letting PingMate handle the notification noise through the power of on-device ML and Gemini AI._
 
-### 📥 Get the Application
-[![Download APK](https://img.shields.io/badge/Download-Latest_APK-blue?style=for-the-badge&logo=android)](#-direct-download-for-non-technical-users)
+**📥 [Download APK](https://github.com/your-username/PingMate/releases)** — Get the app and install on your Android device.
 
-[Key Features](#-key-features) • [Quick Install](#-direct-download-for-non-technical-users) • [Developer Setup](#-getting-started-for-developers) • [Screenshots](#-screenshots)
+[Key Features](#-key-features) • [Screenshots](#-screenshots) • [How to Use](#-how-to-use-the-app) • [Developer Setup](#-getting-started-for-developers)
 
 </div>
-
----
-
-> [!IMPORTANT]  
-> **Gemini API Key Required for AI Features**  
-> PingMate is completely free, open-source, and does not require an account. However, to use the **AI Voice Assistant** and **Smart Summarization** features, you must provide your own private Google Gemini API key.  
-> 1. Get a free key in seconds from **[Google AI Studio](https://aistudio.google.com/apikey)**.  
-> 2. Open the PingMate app, go to **Settings > Gemini API Key**, and paste your key.  
-> *Your key is stored 100% securely and locally on your device. It is never shared with us or any third-party servers.*
 
 ---
 
@@ -43,70 +33,94 @@ Whether you are a busy professional trying to declutter your status bar, or a de
 
 ## 🚀 Key Features
 
-<table>
-  <tr>
-    <td>
-      <br><strong>🎙️ Voice AI Assistant</strong><br>
-      Fully integrated with Google Gemini to summarize notifications via natural speech or text.<br><br>
-    </td>
-    <td>
-      <br><strong>🗂️ Unified Smart Feed</strong><br>
-      Your alerts from WhatsApp, Gmail, Instagram, etc., paginated and organized into one sleek dashboard.<br><br>
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <br><strong>⏰ Contextual Reminders</strong><br>
-      Set time-based alarms linked directly to specific notifications, or create standalone reminders effortlessly.<br><br>
-    </td>
-    <td>
-      <br><strong>🔒 Privacy First</strong><br>
-      No accounts. No sign-ups. Your data stays on your device—communicating only directly with the Gemini API (when configured by you).<br><br>
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <br><strong>🎨 Material Design 3</strong><br>
-      Stunning Jetpack Compose UI adapting to system dark mode with buttery-smooth animations and dynamic widget support.<br><br>
-    </td>
-    <td>
-      <br><strong>🖼️ Rich Media Previews</strong><br>
-      See large contact avatars and big-picture media natively parsed straight from the original notifications.<br><br>
-    </td>
-  </tr>
-</table>
+Features are organized by what you see in the app—from onboarding to daily use.
+
+| Feature | What you get |
+| :--- | :--- |
+| **🎙️ Voice AI Assistant** | Tap the mic FAB on Home or the widget. Speak or type (e.g. *“Summarize today’s WhatsApp”*). Results are powered by **Google Gemini** using your API key from Settings. |
+| **📋 Unified notification feed** | One list for all tracked apps (WhatsApp, Gmail, Instagram, etc.). Paginated list with app icon, title, content, time. Filter by app, search by text, filter by date (Today, Yesterday, …). |
+| **⏰ Reminders** | On any notification, set a **date & time** and optional note in one dialog. Or create standalone reminders. Upcoming reminders appear on Home; alarms fire at the set time. |
+| **🖼️ Sender avatars & media** | When the source app provides them, you see contact avatars (large icon) and shared images (big picture) in the feed and in notification details. |
+| **🔧 Settings** | **Gemini API key** (required for AI), **Choose applications** (which apps to track), **Exclude from AI** (per-app toggles), **Clear messages** (by app or clear all). |
+| **📱 Home screen widget** | Add the PingMate widget to open the AI assistant in one tap. |
+| **🔒 Privacy first** | No account or sign-up. Your API key and data stay on device. Notifications are only sent to Gemini when you use the AI features. |
 
 ---
 
 ## 📱 Screenshots
 
-<div align="center">
-  <img src="app_screens/Onboarding Screen.jpeg" width="22%" alt="Onboarding Screen"/>
-  <img src="app_screens/Notifcation Permision Screen.jpeg" width="22%" alt="Permissions"/>
-  <img src="app_screens/Choose App Screen.jpeg" width="22%" alt="Choose App"/>
-  <img src="app_screens/Home Screen.jpeg" width="22%" alt="Home Screen"/>
-</div>
-<div align="center">
-  <img src="app_screens/Assistant Screen.jpeg" width="22%" alt="AI Assistant"/>
-  <img src="app_screens/Ai Result Screen.jpeg" width="22%" alt="AI Result"/>
-  <img src="app_screens/Setting Screen.jpeg" width="22%" alt="Settings"/>
-  <img src="app_screens/Home Widget Screen.jpeg" width="22%" alt="Home Widget"/>
-</div>
+Screens in app flow order: **Onboarding → Permission → Choose App → Home → Voice Assistant → AI Result → Settings → Home Widget**.
+
+| 1. Onboarding | 2. Permission | 3. Choose App | 4. Home |
+|:---:|:---:|:---:|:---:|
+| <img src="app_screens/Onboarding Screen.jpeg" width="210" alt="Onboarding"/> | <img src="app_screens/Notifcation Permision Screen.jpeg" width="210" alt="Permission"/> | <img src="app_screens/Choose App Screen.jpeg" width="210" alt="Choose App"/> | <img src="app_screens/Home Screen.jpeg" width="210" alt="Home"/> |
+| 5. Voice Assistant | 6. AI Result | 7. Settings | 8. Home Widget |
+|:---:|:---:|:---:|:---:|
+| <img src="app_screens/Assistant Screen.jpeg" width="210" alt="Voice Assistant"/> | <img src="app_screens/Ai Result Screen.jpeg" width="210" alt="AI Result"/> | <img src="app_screens/Setting Screen.jpeg" width="210" alt="Settings"/> | <img src="app_screens/Home Widget Screen.jpeg" width="210" alt="Home Widget"/> |
 
 ---
 
-## 📥 Direct Download (For Non-Technical Users)
+## 📖 How to Use the App
 
-You do not need to be a developer to use PingMate! If you just want to install the app on your Android phone, follow these simple steps:
+A clear, step-by-step guide from first launch to every main action in the app.
 
-1. **Download the App:**  
-   👉 **[Click Here to Download `pingmate-release.apk`](#)** *(Note to repository owner: Update this link with your actual GitHub Release URL)*
-2. **Install the APK:**  
-   Locate the downloaded `.apk` file in your phone's "Downloads" folder or file manager and tap it. If prompted, allow your phone to "Install unknown apps" from your browser or file manager.
-3. **Grant Permissions:**  
-   Open PingMate. The app will ask for "Notification Access". This is strictly required so PingMate can read, organize, and summarize your alerts.
-4. **Activate AI Summaries:**  
-   As mentioned above, grab a free API key from [Google AI Studio](https://aistudio.google.com/apikey), then paste it into the application's **Settings** screen. You're all set!
+---
+
+### 1️⃣ First-time setup
+
+| Step | Screen | What to do |
+| :---: | :--- | :--- |
+| 1 | **Welcome** | Open PingMate. Read the feature cards and tap **Get Started**. |
+| 2 | **Notification access** | The app explains why it needs notification access. Tap the button to open **system settings**, find PingMate under *Notification access*, and **turn it on**. Return to the app. |
+| 3 | **Choose Apps** | Select the apps you want to track (e.g. WhatsApp, Gmail, Instagram). Tap **Done** or **Continue**. |
+| 4 | **Home** | You land on the main feed. Notifications from the chosen apps will appear here as they arrive. |
+
+---
+
+### 2️⃣ Home feed
+
+| Action | How |
+| :--- | :--- |
+| **Browse** | Scroll the list. Each card shows app icon, title, snippet, and time. |
+| **Filter by date** | Tap a chip in the date strip (Today, Yesterday, or a specific date). |
+| **Filter by app / search** | Use the **filter** icon to pick an app, or the **search** icon to type keywords. |
+| **Open a notification** | Tap a card → **detail sheet** opens. From here you can set a reminder, favorite, delete, or open in the original app. |
+| **Remove from feed** | Swipe the card left to delete. |
+
+---
+
+### 3️⃣ Voice AI assistant
+
+| Step | What happens |
+| :---: | :--- |
+| 1 | On **Home**, tap the **microphone FAB** (or add the PingMate **widget** and tap it). Grant **microphone** permission if asked. |
+| 2 | The **Assistant screen** opens (full-screen overlay). You see a listening animation. **Speak** your request (e.g. *“Summarize today’s WhatsApp”*, *“What did I get from Gmail?”*). |
+| 3 | After you finish, the app sends recent notifications as context to **Gemini**. A **result card** appears on the same screen with your request and the AI summary. You can copy the text or tap **Done** to close. |
+| 4 | **To use AI:** Set your **Gemini API key** in **Settings → Gemini API Key** ([get one here](https://aistudio.google.com/apikey)). |
+
+---
+
+### 4️⃣ Reminders
+
+| Step | What happens |
+| :---: | :--- |
+| 1 | From **Home**, tap a **notification** → the **detail sheet** opens. |
+| 2 | Tap **Set reminder** (or use the reminder entry point from the reminders section). The **Set Reminder dialog** opens. |
+| 3 | Tap the **date & time** row to open the picker. Choose date and time; add an optional **note**. Tap **Schedule**. |
+| 4 | The reminder appears in the **Reminders** section on Home. At the set time, you get a **system notification**. |
+
+---
+
+### 5️⃣ Settings
+
+| Option | What it does |
+| :--- | :--- |
+| **Gemini API Key** | Paste your key so the Voice AI and summarization work. Stored only on your device. |
+| **Choose applications** | Opens the same app picker as onboarding; change which apps are tracked. |
+| **Exclude from AI** | Per-app toggles so that app’s notifications are not sent to Gemini. |
+| **Clear messages** | Opens a dialog listing apps with message counts. Clear one app’s data or **Clear all**. |
+
+*Open Settings from the **gear icon** in the Home top bar.*
 
 ---
 
@@ -124,19 +138,52 @@ PingMate leverages modern Android development paradigms to ensure a robust, main
 - **Widgets:** Glance App Widget
 - **Build System:** Gradle Kotlin DSL (KTS), Version Catalogs
 
-### 🧩 App Flow
-```mermaid
-graph LR
-A[Welcome] --> B[Notification Permission]
-B --> C[Choose Tracked Apps]
-C --> D[Home Feed]
-D <--> E[Settings / Gemini API]
-D <--> F(Voice AI Assistant)
+### 🧩 App flow (navigation)
+
+Full flow as in the app: onboarding, then from Home you reach Assistant screen, Assistant result, Settings, and Reminder dialog.
+
 ```
+┌─────────────┐     ┌──────────────────────┐     ┌───────────────┐     ┌─────────────┐
+│   Welcome   │ ──► │ Notification Access  │ ──► │  Choose Apps  │ ──► │    Home     │
+│ Get Started │     │ (system settings)    │     │ (tracked apps) │     │ (main feed) │
+└─────────────┘     └──────────────────────┘     └───────────────┘     └──────┬──────┘
+                                                                               │
+         ┌──────────────────────────────────────────┬────────────────────────┼────────────────────────┐
+         │                                          │                        │                        │
+         ▼                                          ▼                        ▼                        ▼
+┌─────────────────┐                    ┌─────────────────────┐   ┌──────────────┐         ┌─────────────────┐
+│    Settings     │                    │  Voice AI Assistant   │   │ Notification │         │  Home Widget    │
+│ (gear on Home)  │                    │  (FAB on Home)       │   │    Detail    │         │ (tap → same     │
+│                 │                    │         │            │   │    Sheet     │         │  as FAB)        │
+│ • Gemini API    │                    │         ▼            │   │       │      │         └─────────────────┘
+│ • Choose apps   │                    │  Assistant Screen    │   │       │      │
+│ • Exclude from  │                    │  (listening →       │   │       ▼      │
+│   AI            │                    │   speak command)     │   │ Set Reminder  │
+│ • Clear messages│                    │         │            │   │   Dialog      │
+└─────────────────┘                    │         ▼            │   │ (date & time  │
+                                       │  Result card on      │   │  + note)      │
+                                       │  same Assistant      │   └─────────────────┘
+                                       │  screen              │
+                                       └─────────────────────┘
+```
+
+| From | You can open |
+| :--- | :--- |
+| **Home** | **Settings** (gear) · **Voice Assistant** (FAB or widget) · **Notification detail** (tap a card) |
+| **Notification detail** | **Set Reminder** dialog (date, time, note) · Favorite · Delete · Open in original app |
+| **Assistant screen** | Speak command → **result card** on same screen → Done to close |
+| **Settings** | Choose applications (app picker) · Clear messages (by app or all) |
 
 ---
 
 ## 🎮 Getting Started (For Developers)
+
+> [!IMPORTANT]  
+> **Gemini API key required for AI features**  
+> PingMate is free and does not require an account. To use **AI Voice Assistant** and **Smart Summarization**, you need your own Google Gemini API key.  
+> 1. Get a free key from **[Google AI Studio](https://aistudio.google.com/apikey)**.  
+> 2. In the app: **Settings → Gemini API Key** → paste your key.  
+> Your key is stored only on your device and is never sent to our servers.
 
 ### Prerequisites
 
@@ -179,11 +226,11 @@ com.app.pingmate/
 
 ## 🔮 Roadmap & Upcoming Features
 
-- [ ] **Cloud Sync:** Optional, secure backup of your notification history (encrypted).
-- [ ] **Expanded AI Selection:** Native support for choosing local/custom LLMs.
-- [ ] **Quick Reply Actions:** Reply directly within the PingMate feed without opening the parent application.
-- [ ] **Wear OS Component:** Companion smartwatch app for rapid notification summaries.
-- [ ] **Advanced Theming:** Pure black AMOLED themes and extensive accent color customization.
+- [ ] **Auto OTP picker** — Automatically detect and pick OTPs from notifications so you can copy or auto-fill them in one tap.
+- [ ] **Better utilization of AI** — Deeper integration and smarter use of AI across the app (summaries, actions, and insights).
+- [ ] **Specific alert & reminder for specific notifications** — Custom sounds and high-priority alerts for chosen contacts or apps (e.g. when a specific person messages you).
+- [ ] **Statistics & analysis of notifications** — Predefined analytics (volume, apps, trends) and predefined quick replies; clearer insight into your notification patterns.
+- [ ] **Automatic processes** — More automation (e.g. auto-categorize, auto-reply templates, scheduled summaries) so routine actions happen without extra steps.
 
 ---
 
