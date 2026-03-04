@@ -13,3 +13,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Built APKs — do not commit (use CI or manual uploads)
+*.apk

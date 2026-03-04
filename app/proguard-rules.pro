@@ -5,6 +5,17 @@
 # For more details, see
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
+# Keep Room entities and DAOs (used via reflection)
+-keep class com.app.pingmate.data.local.entity.** { *; }
+-keep interface com.app.pingmate.data.local.dao.** { *; }
+
+# Keep Koin (reflection-based DI)
+-keep class org.koin.** { *; }
+-dontwarn org.koin.**
+
+# Keep Lottie
+-keep class com.airbnb.lottie.** { *; }
+
 # If your project uses WebView with JS, uncomment the following
 # and specify the fully qualified class name to the JavaScript interface
 # class:

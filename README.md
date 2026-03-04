@@ -1,5 +1,5 @@
 <p>
-  <img src="app/src/main/ic_launcher-playstore.png" width="140" alt="PingMate Logo">
+  <img src="app/src/main/ic_launcher_foreground.webp" width="140" alt="PingMate Logo">
 </p>
 
 <h1>PingMate ⚡</h1>

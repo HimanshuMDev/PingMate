@@ -742,6 +742,7 @@ fun HomeScreen(
                     NotificationDetailSheetContent(
                         notification = notification,
                         onOpen = {
+                            var opened = false
                             var contentIntent = NotificationIntentCache.get(notification.id)
                             if (contentIntent == null && !notification.notificationKey.isNullOrBlank()) {
                                 PingMateNotificationService.resolveIntentFromActiveNotifications(
@@ -753,13 +754,31 @@ fun HomeScreen(
                             if (contentIntent != null) {
                                 try {
                                     contentIntent.send()
+                                    opened = true
                                 } catch (e: Exception) {
-                                    context.packageManager.getLaunchIntentForPackage(notification.packageName)
-                                        ?.let { context.startActivity(it) }
+                                    // Fall through to launch app by package
                                 }
-                            } else {
-                                context.packageManager.getLaunchIntentForPackage(notification.packageName)
-                                    ?.let { context.startActivity(it) }
+                            }
+                            if (!opened) {
+                                try {
+                                    val launchIntent = context.packageManager.getLaunchIntentForPackage(notification.packageName)
+                                    if (launchIntent != null) {
+                                        launchIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        context.startActivity(launchIntent)
+                                    } else {
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            "App not found",
+                                            android.widget.Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                } catch (e: Exception) {
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "Could not open app",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                }
                             }
                             detailNotification = null
                         },

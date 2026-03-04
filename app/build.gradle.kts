@@ -9,6 +9,8 @@ android {
     namespace = "com.app.pingmate"
     compileSdk = 36
 
+    // Build as Android App Bundle (./gradlew bundleRelease) for smaller downloads:
+    // Play Store serves per-ABI APKs so users get ~25–50% smaller installs.
     defaultConfig {
         applicationId = "com.app.pingmate"
         minSdk = 29
@@ -21,7 +23,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -53,12 +56,15 @@ dependencies {
     implementation(libs.androidx.compose.material3)
 
     // Material Components (needed for XML theme resolution)
+    //noinspection GradleDependency
     implementation("com.google.android.material:material:1.12.0")
 
     // Material Icons Extended (added inline — not in catalog yet)
+    //noinspection UseTomlInstead
     implementation("androidx.compose.material:material-icons-extended")
 
     // Accompanist Drawable Painter
+    //noinspection NewerVersionAvailable
     implementation("com.google.accompanist:accompanist-drawablepainter:0.34.0")
 
     // Navigation
@@ -97,15 +103,12 @@ dependencies {
     implementation(libs.glance.material3)
 
     // Lottie Compose for AI Voice Animation
+    //noinspection NewerVersionAvailable
     implementation("com.airbnb.android:lottie-compose:6.3.0")
 
     // SavedState (for Overlay ComposeView lifecycle)
     implementation("androidx.savedstate:savedstate:1.2.1")
 
-    // Google ML Kit (Lightweight On-Device Native AI)
-    implementation("com.google.mlkit:entity-extraction:16.0.0-beta5")
-    implementation("com.google.mlkit:smart-reply:17.0.4")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
     // Paging 3
     implementation("androidx.paging:paging-compose:3.2.1")
     implementation("androidx.room:room-paging:2.6.1")
