@@ -57,7 +57,7 @@ Screens in app flow order: **Onboarding → Permission → Choose App → Home �
 
 | 1. Onboarding | 2. Permission | 3. Choose App | 4. Home |
 |:---:|:---:|:---:|:---:|
-| <img src="app_screens/Onboarding Screen.jpeg" width="210" alt="Onboarding"/> | <img src="app_screens/Notifcation Permision Screen.jpeg" width="210" alt="Permission"/> | <img src="app_screens/Choose App Screen.jpeg" width="210" alt="Choose App"/> | <img src="app_screens/Home Screen.jpeg" width="210" alt="Home"/> |
+| <img src="app_screens/Notifcation Permision Screen.jpeg" width="210" alt="Onboarding"/> | <img src="app_screens/Onboarding Screen.jpeg" width="210" alt="Permission"/> | <img src="app_screens/Choose App Screen.jpeg" width="210" alt="Choose App"/> | <img src="app_screens/Home Screen.jpeg" width="210" alt="Home"/> |
 | 5. Voice Assistant | 6. AI Result | 7. Settings | 8. Home Widget |
 |:---:|:---:|:---:|:---:|
 | <img src="app_screens/Assistant Screen.jpeg" width="210" alt="Voice Assistant"/> | <img src="app_screens/Ai Result Screen.jpeg" width="210" alt="AI Result"/> | <img src="app_screens/Setting Screen.jpeg" width="210" alt="Settings"/> | <img src="app_screens/Home Widget Screen.jpeg" width="210" alt="Home Widget"/> |
