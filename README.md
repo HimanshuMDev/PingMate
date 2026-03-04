@@ -1,330 +1,211 @@
 <div align="center">
 
-<img src="app/src/main/ic_launcher-playstore.png" alt="PingMate Logo" width="128" />
+<img src="app/src/main/ic_launcher-playstore.png" alt="PingMate Logo" width="160" />
 
-<br />
+# ⚡ PingMate (NotiFlow AI)
 
-# **PingMate**
+**Your Intelligent, Privacy-First Notification Hub**
 
-### *Smart Notification Hub for Android*
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org)
+[![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?style=for-the-badge&logo=jetpackcompose)](https://developer.android.com/jetpack/compose)
+[![Android](https://img.shields.io/badge/Android-10%2B-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com)
+[![License](https://img.shields.io/badge/License-MIT-lightgrey?style=for-the-badge)]()
+[![Build](https://img.shields.io/badge/Build-Passing-brightgreen?style=for-the-badge)]()
 
-**One feed · AI summaries · Reminders — No account required.**
+_One unified feed. AI-powered summaries. Smart reminders. Zero accounts required._ <br>
+_Reclaim your focus by letting PingMate handle the notification noise through the power of on-device ML and Gemini AI._
 
-<br />
+### 📥 Get the Application
+[![Download APK](https://img.shields.io/badge/Download-Latest_APK-blue?style=for-the-badge&logo=android)](#-direct-download-for-non-technical-users)
 
-[![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
-[![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?logo=jetpackcompose)](https://developer.android.com/jetpack/compose)
-[![Android](https://img.shields.io/badge/Android-10%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com)
-[![Min SDK](https://img.shields.io/badge/minSdk-29-green)]()
-[![License](https://img.shields.io/badge/License-See%20below-lightgrey)]()
+[Key Features](#-key-features) • [Quick Install](#-direct-download-for-non-technical-users) • [Developer Setup](#-getting-started-for-developers) • [Screenshots](#-screenshots)
 
 </div>
 
 ---
 
-## Table of Contents
-
-- [Overview](#-overview)
-- [Screenshots](#-screenshots) — Welcome · Choose Apps · Home · Set Reminder · AI Assistant · Settings
-- [Key Features](#-key-features)
-- [App Flow](#️-app-flow)
-- [Architecture](#️-architecture)
-- [Tech Stack](#️-tech-stack)
-- [Getting Started](#-getting-started)
-- [Project Structure](#-project-structure)
-- [Configuration](#️-configuration)
-- [Documentation](#-documentation)
-- [Upcoming Features](#-upcoming-features)
-- [License](#-license)
+> [!IMPORTANT]  
+> **Gemini API Key Required for AI Features**  
+> PingMate is completely free, open-source, and does not require an account. However, to use the **AI Voice Assistant** and **Smart Summarization** features, you must provide your own private Google Gemini API key.  
+> 1. Get a free key in seconds from **[Google AI Studio](https://aistudio.google.com/apikey)**.  
+> 2. Open the PingMate app, go to **Settings > Gemini API Key**, and paste your key.  
+> *Your key is stored 100% securely and locally on your device. It is never shared with us or any third-party servers.*
 
 ---
 
-## 📖 Overview
+## 🌟 Why PingMate?
 
-**PingMate** (also known as *NotiFlow AI*) is a modern Android application that brings all your app notifications into a single, intelligent feed. Choose which apps to track—WhatsApp, Gmail, Instagram, and more—and see every alert in one place with search, filters, and optional **AI-powered summaries** via Google Gemini. Set reminders on any notification or create standalone reminders, and control your data with per-app or full clear—all without signing up or creating an account.
+Notifications today are overwhelming. **PingMate** reclaims your focus by acting as an intelligent intermediary between your apps and your attention. Built purely with modern Android technologies, PingMate ingests, filters, and summarizes your alerts securely using on-device Machine Learning and optional Gemini AI integrations. 
 
-Built with **Jetpack Compose** and **Material 3**, the app offers a clean dark-theme experience, a voice-enabled AI assistant, and a home-screen widget for quick access.
+Whether you are a busy professional trying to declutter your status bar, or a developer looking to explore cutting-edge Android architecture, PingMate provides a seamless, beautiful, and highly customizable experience. You'll never miss what matters while muting the noise.
+
+---
+
+## 🚀 Key Features
+
+<table>
+  <tr>
+    <td>
+      <br><strong>🎙️ Voice AI Assistant</strong><br>
+      Fully integrated with Google Gemini to summarize notifications via natural speech or text.<br><br>
+    </td>
+    <td>
+      <br><strong>🗂️ Unified Smart Feed</strong><br>
+      Your alerts from WhatsApp, Gmail, Instagram, etc., paginated and organized into one sleek dashboard.<br><br>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <br><strong>⏰ Contextual Reminders</strong><br>
+      Set time-based alarms linked directly to specific notifications, or create standalone reminders effortlessly.<br><br>
+    </td>
+    <td>
+      <br><strong>🔒 Privacy First</strong><br>
+      No accounts. No sign-ups. Your data stays on your device—communicating only directly with the Gemini API (when configured by you).<br><br>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <br><strong>🎨 Material Design 3</strong><br>
+      Stunning Jetpack Compose UI adapting to system dark mode with buttery-smooth animations and dynamic widget support.<br><br>
+    </td>
+    <td>
+      <br><strong>🖼️ Rich Media Previews</strong><br>
+      See large contact avatars and big-picture media natively parsed straight from the original notifications.<br><br>
+    </td>
+  </tr>
+</table>
 
 ---
 
 ## 📱 Screenshots
 
-Add your own screenshots below. Recommended: capture each screen on a device or emulator, save as PNG, place in a `/docs/screenshots` or `/assets` folder, and reference them here.
+<div align="center">
+  <img src="app_screens/Onboarding Screen.jpeg" width="22%" alt="Onboarding Screen"/>
+  <img src="app_screens/Notifcation Permision Screen.jpeg" width="22%" alt="Permissions"/>
+  <img src="app_screens/Choose App Screen.jpeg" width="22%" alt="Choose App"/>
+  <img src="app_screens/Home Screen.jpeg" width="22%" alt="Home Screen"/>
+</div>
+<div align="center">
+  <img src="app_screens/Assistant Screen.jpeg" width="22%" alt="AI Assistant"/>
+  <img src="app_screens/Ai Result Screen.jpeg" width="22%" alt="AI Result"/>
+  <img src="app_screens/Setting Screen.jpeg" width="22%" alt="Settings"/>
+  <img src="app_screens/Home Widget Screen.jpeg" width="22%" alt="Home Widget"/>
+</div>
 
 ---
 
-### 1. Welcome & Onboarding
+## 📥 Direct Download (For Non-Technical Users)
 
-First-time users see a welcome screen with the app value proposition and a single **Get Started** action. After granting notification access, they land on **Choose Apps**.
+You do not need to be a developer to use PingMate! If you just want to install the app on your Android phone, follow these simple steps:
 
-| |
-|:--:|
-| *Screenshot: **Welcome screen** — App name, tagline, three feature cards (Powered by Gemini AI, Smart Notification Feed, Privacy First), and the primary CTA button.* |
-| 📁 `docs/screenshots/welcome.png` |
-
----
-
-### 2. Choose Apps Screen
-
-Users select which applications they want PingMate to track. Only notifications from these apps appear in the feed.
-
-| |
-|:--:|
-| *Screenshot: **Choose Apps** — List of installed apps with icons and names; checkboxes to select/deselect. Search and “Done” or “Continue” to proceed to Home.* |
-| 📁 `docs/screenshots/choose_apps.png` |
+1. **Download the App:**  
+   👉 **[Click Here to Download `pingmate-release.apk`](#)** *(Note to repository owner: Update this link with your actual GitHub Release URL)*
+2. **Install the APK:**  
+   Locate the downloaded `.apk` file in your phone's "Downloads" folder or file manager and tap it. If prompted, allow your phone to "Install unknown apps" from your browser or file manager.
+3. **Grant Permissions:**  
+   Open PingMate. The app will ask for "Notification Access". This is strictly required so PingMate can read, organize, and summarize your alerts.
+4. **Activate AI Summaries:**  
+   As mentioned above, grab a free API key from [Google AI Studio](https://aistudio.google.com/apikey), then paste it into the application's **Settings** screen. You're all set!
 
 ---
 
-### 3. Home Screen
+## 🛠️ Tech Stack & Architecture
 
-The main dashboard: a paginated list of notifications with app icon, title, content, and time. Date strip (Today, Yesterday, etc.), app filter chips, search, and a floating action button for the AI assistant. Reminders section shows upcoming alerts.
+PingMate leverages modern Android development paradigms to ensure a robust, maintainable, and highly performant application.
 
-| |
-|:--:|
-| *Screenshot: **Home** — Top bar with app logo and “PingMate”, “RECENT ALERTS” header with notification count badge, scrollable notification cards (with avatars/media where available), date strip, filter row, and Voice AI FAB.* |
-| 📁 `docs/screenshots/home.png` |
+### 🏗️ MVVM & Clean Architecture
+- **UI Architecture:** 100% Jetpack Compose (Material 3), Navigation Compose
+- **Concurrency:** Kotlin Coroutines & Flow
+- **Data Persistence:** Room Database (Paging 3 Support), DataStore Preferences
+- **Dependency Injection:** Koin
+- **Background Work:** WorkManager, Android Services (`NotificationListenerService`)
+- **AI & ML:** Gemini SDK (offline summarization engine), Google ML Kit (Entity Extraction, Smart Reply)
+- **Widgets:** Glance App Widget
+- **Build System:** Gradle Kotlin DSL (KTS), Version Catalogs
 
----
-
-### 4. Set Reminder Screen
-
-Tapping “Set reminder” on a notification (or creating a general reminder) opens a dialog with a combined **date & time** picker in one row and an optional note field.
-
-| |
-|:--:|
-| *Screenshot: **Set Reminder** — Dialog titled “Schedule Alert” or “Schedule Reminder”, notification context bubble, single row showing date and time (e.g. “25 Mar 2026   10:30 AM”), note field, and Schedule / Dismiss buttons.* |
-| 📁 `docs/screenshots/set_reminder.png` |
-
----
-
-### 5. AI Assistant Screen
-
-Full-screen overlay for the voice AI: Lottie animation, microphone state (“Listening…” / “Starting…”), and the AI summary result in a compact card once processing completes.
-
-| |
-|:--:|
-| *Screenshot: **AI Assistant** — Dark overlay, centered Lottie animation, prompt/transcription text, and the summary result card with “YOUR REQUEST” and “PINGMATE INTELLIGENCE” sections. Close button at top.* |
-| 📁 `docs/screenshots/ai_assistant.png` |
-
----
-
-### 6. Settings Screen
-
-Central place for Gemini API key, app selection, AI exclusions, and clearing notifications.
-
-| |
-|:--:|
-| *Screenshot: **Settings** — Sections: Gemini API (key input), Choose applications (navigate to app picker), Exclude from AI (per-app toggles), Clear messages (opens dialog to clear by app or clear all). Back arrow in top bar.* |
-| 📁 `docs/screenshots/settings.png` |
-
----
-
-## ✨ Key Features
-
-| Feature | Description |
-| :--- | :--- |
-| **Onboarding** | Welcome → Notification access permission → Choose apps to track. One-time flow; returning users open directly on Home. |
-| **Unified feed** | Paginated list with app icon, title, content, time. Filter by app, search by text, filter by date. Favorites and swipe-to-delete. |
-| **Sender & media** | Displays notification large icon (e.g. contact avatar) and big picture (e.g. shared image) when provided by the source app. |
-| **Voice AI assistant** | Tap FAB or widget → speak or type → receive a summary powered by **Google Gemini**. API key configured in Settings. |
-| **Reminders** | Combined date & time picker and note on a notification, or standalone general reminder. Upcoming reminders on Home; alarms via `AlarmManager`. |
-| **Settings** | Gemini API key, choose apps, exclude apps from AI, clear messages by app or clear all. |
-| **Home screen widget** | Quick-launch tile for the AI assistant. |
-| **Dynamic count** | Badge shows real notification count for the current filters (date, app, search). |
-| **Empty state** | “No Notifications Yet” with icon and refresh when the list is empty. |
-
----
-
-## 🗺️ App Flow
-
-```
-Welcome  →  Permission  →  Choose Apps  →  Home  ⇄  Settings
+### 🧩 App Flow
+```mermaid
+graph LR
+A[Welcome] --> B[Notification Permission]
+B --> C[Choose Tracked Apps]
+C --> D[Home Feed]
+D <--> E[Settings / Gemini API]
+D <--> F(Voice AI Assistant)
 ```
 
-- **First launch:** Welcome → Permission → Choose Apps → Home.
-- **Later launches:** If onboarding is complete and notification access is enabled, the app opens on **Home**.
-- **Home:** Notification list (paged), date strip, app filter, search, reminders section, FAB for Voice AI. Tap a notification for details; set reminder, favorite, delete, or open in the original app.
-- **Settings:** Opened from Home; from here you can re-open Choose Apps and use Clear messages (by app or clear all).
-
 ---
 
-## 🏗️ Architecture
+## 🎮 Getting Started (For Developers)
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     UI Layer · Jetpack Compose                    │
-│  WelcomeScreen · PermissionScreen · ChooseAppsScreen ·            │
-│  HomeScreen · SettingsScreen · VoiceAssistantScreen · Dialogs    │
-└─────────────────────────────┬───────────────────────────────────┘
-                              │
-┌─────────────────────────────▼───────────────────────────────────┐
-│                   ViewModels & Navigation                        │
-│  HomeViewModel (paging, filters, AI, reminders) ·                 │
-│  ChooseAppsViewModel · NavGraph (single Activity)                │
-└─────────────────────────────┬───────────────────────────────────┘
-                              │
-┌─────────────────────────────▼───────────────────────────────────┐
-│                    Data & Business Logic                          │
-│  Room (NotificationDao, GeneralReminderDao) ·                      │
-│  SharedPreferences (tracked apps, API key, onboarding) ·         │
-│  OfflineSummarizationEngine (Gemini API) · ReminderNlp            │
-└─────────────────────────────┬───────────────────────────────────┘
-                              │
-┌─────────────────────────────▼───────────────────────────────────┐
-│                     System & Services                             │
-│  PingMateNotificationService (NotificationListenerService) ·     │
-│  ReminderReceiver (AlarmManager) · AiWidgetActivity · Widget      │
-└─────────────────────────────────────────────────────────────────┘
-```
+### Prerequisites
 
-- **Single Activity:** `MainActivity` hosts the Compose UI and `PingMateNavGraph`. No fragments.
-- **State:** ViewModels expose `StateFlow` / `Flow`; UI uses `collectAsState()` and `collectAsLazyPagingItems()`. ViewModels and utilities talk to Room and SharedPreferences directly.
-- **Notifications:** `PingMateNotificationService` receives system notifications, filters by tracked apps, deduplicates by `notificationKey`, and inserts/updates `NotificationEntity` in Room. Large icon and big picture are stored as Base64 when available.
-- **AI:** `OfflineSummarizationEngine` builds a minimal text context from recent notifications, calls the Gemini REST API with the user’s API key, and parses the response. Used by `HomeViewModel` when the user triggers the voice assistant or summary.
-- **Reminders:** Stored in Room (`NotificationEntity.reminderTime` / `GeneralReminderEntity`). `AlarmManager` and `ReminderReceiver` post a notification at the scheduled time.
+- **Android Studio** (Koala or newer recommended)
+- **JDK 11+**
+- **Android SDK** API 29 or higher (Android 10+)
+- **Device or Emulator** (API 29+) required for `NotificationListenerService` and Exact Alarms testing.
 
----
+### Local Installation
 
-## 🛠️ Tech Stack
-
-| Layer | Technology |
-| :--- | :--- |
-| **Language** | Kotlin `2.0.21` |
-| **UI** | **Jetpack Compose** (Material 3), Compose BOM `2024.09` |
-| **Navigation** | Navigation Compose `2.7.7` |
-| **Local DB** | Room `2.6.1` · Paging 3 `3.2.1` |
-| **Async** | Kotlin Coroutines `1.8.1` · Flow |
-| **DI** | Koin `3.5.6` |
-| **Widget** | Glance `1.1.0` (App Widget) |
-| **Other** | DataStore Preferences · Splash Screen API · Lottie Compose `6.3.0` · ML Kit (entity extraction, smart reply) |
-| **Build** | Gradle `8.13` · AGP `8.13.2` · KSP `2.0.21-1.0.27` |
-
-**SDK:** `minSdk 29` · `targetSdk 36` · `compileSdk 36`
-
----
-
-## 🚀 Getting Started
-
-### Requirements
-
-- **Android Studio** (latest stable recommended)
-- **JDK 11**
-- **Android SDK** with API 29+
-- **Device or emulator** on Android 10+ for notification listener and exact alarms
-
-### Clone and open
-
-```bash
-git clone https://github.com/your-org/PingMate.git
-cd PingMate
-```
-
-Open the project in Android Studio (**File → Open** → select the project folder) and let Gradle sync.
-
-### Build and run
-
-**Debug:**
-
-```bash
-./gradlew assembleDebug
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-```
-
-Or use **Run → Run 'app'** in Android Studio.
-
-**Release:** Configure signing in `app/build.gradle.kts`, then:
-
-```bash
-./gradlew assembleRelease
-```
-
-### First run
-
-1. Grant **Notification access** when prompted (required for the feed).
-2. **Choose apps** to track (e.g. WhatsApp, Gmail).
-3. On **Home**, notifications from those apps will appear. To use AI summaries, go to **Settings** and add your **Gemini API key** ([Get one here](https://aistudio.google.com/apikey)).
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/your-username/PingMate.git
+   cd PingMate
+   ```
+2. **Open the project in Android Studio** and allow Gradle to sync.
+3. **Build & Run** on your device or emulator:
+   ```bash
+   ./gradlew installDebug
+   ```
 
 ---
 
 ## 📂 Project Structure
 
-```
-app/src/main/
-├── java/com/app/pingmate/
-│   ├── MainActivity.kt
-│   ├── data/local/
-│   │   ├── PingMateDatabase.kt
-│   │   ├── dao/NotificationDao.kt, GeneralReminderDao.kt
-│   │   └── entity/NotificationEntity.kt, GeneralReminderEntity.kt
-│   ├── presentation/
-│   │   ├── navigation/NavGraph.kt
-│   │   └── screen/
-│   │       ├── onboarding/WelcomeScreen.kt, PermissionScreen.kt
-│   │       ├── apps/ChooseAppsScreen.kt, ChooseAppsViewModel.kt
-│   │       ├── dashboard/
-│   │       │   ├── HomeScreen.kt, HomeViewModel.kt
-│   │       │   ├── VoiceAssistantScreen.kt, VoiceAiDialog.kt
-│   │       │   ├── SetReminderDialog.kt, CalendarStrip.kt
-│   │       └── settings/SettingsScreen.kt
-│   ├── service/PingMateNotificationService.kt
-│   ├── receiver/ReminderReceiver.kt
-│   ├── widget/AiWidgetActivity.kt, AiAssistantWidgetProvider.kt
-│   ├── utils/
-│   │   ├── OfflineSummarizationEngine.kt
-│   │   ├── SpeechRecognizerManager.kt
-│   │   ├── ReminderNlp.kt
-│   │   └── NotificationIntentCache.kt
-│   └── ui/theme/Color.kt, Theme.kt, Type.kt
-├── res/
-│   ├── layout/, drawable/, values/
-│   ├── raw/ (e.g. ai_animation.json for Lottie)
-│   └── xml/ (widget, backup, data extraction)
-└── AndroidManifest.xml
+```text
+com.app.pingmate/
+├── data/             # Room DB configurations, DAOs, Entities
+├── presentation/     # Jetpack Compose UI, ViewModels, Navigation Graphs
+│   ├── onboarding/   # Walkthrough & Permissions flow
+│   ├── dashboard/    # Home Feed, AI Voice Overlay, Reminders dialog
+│   └── settings/     # App Configuration, Exclusions, API Keys
+├── service/          # Core NotificationListenerService implementation
+├── receiver/         # AlarmManager Broadcast Receivers for reminders
+├── widget/           # Glance-based Home Screen widgets
+└── utils/            # AI Engines, ML Kit integration, Date formatters
 ```
 
 ---
 
-## ⚙️ Configuration
+## 🔮 Roadmap & Upcoming Features
 
-| What | Where / How |
-| :--- | :--- |
-| **Gemini API key** | In-app: **Settings → Gemini API Key**. Stored locally (SharedPreferences); not hardcoded. |
-| **Tracked apps** | **Settings → Choose applications** (or during onboarding). Stored in SharedPreferences. |
-| **Exclude from AI** | **Settings → Exclude from AI** (per-app toggles). Notifications from these apps are omitted from the context sent to Gemini. |
-
-No environment variables or build-time secrets are required for basic use.
+- [ ] **Cloud Sync:** Optional, secure backup of your notification history (encrypted).
+- [ ] **Expanded AI Selection:** Native support for choosing local/custom LLMs.
+- [ ] **Quick Reply Actions:** Reply directly within the PingMate feed without opening the parent application.
+- [ ] **Wear OS Component:** Companion smartwatch app for rapid notification summaries.
+- [ ] **Advanced Theming:** Pure black AMOLED themes and extensive accent color customization.
 
 ---
 
-## 📚 Documentation
+## 🤝 Contributing
 
-| Document | Description |
-| :--- | :--- |
-| [**docs/PRESENTATION_APP_JOURNEY.md**](docs/PRESENTATION_APP_JOURNEY.md) | App journey, feature summary, and one-pager for team or presentation. |
-| [**docs/SAMPLE_PROMPTS_FOR_PRESENTATION.md**](docs/SAMPLE_PROMPTS_FOR_PRESENTATION.md) | Sample design and CLI prompts used during development. |
-| [**docs/APP_LOGO_PROMPT.md**](docs/APP_LOGO_PROMPT.md) | Prompt and guidelines for generating the app logo. |
+We welcome contributions to make PingMate even better! 
 
----
-
-## 🔮 Upcoming Features
-
-- **Cloud backup / sync** — Optional backup of notification history or reminders.
-- **More AI models** — Support for additional providers or model selection in Settings.
-- **Notification actions** — Quick reply or action buttons from the feed where the source app supports it.
-- **Wear OS** — Companion tile or app for quick summary and reminders.
-- **Themes** — Light theme and accent customization.
-- **Analytics (opt-in)** — Crash and usage metrics to improve stability and UX.
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
 ---
 
 ## 📄 License
 
-[Specify your license here, e.g. MIT, Apache 2.0, or proprietary.]
+Distributed under the **MIT License**. Please see `LICENSE` for more information.
 
 ---
 
 <div align="center">
-
-**PingMate** — Your notifications, summarized and under control.
-
+  <b>PingMate</b> — Notifications, un-cluttered. <br>
+  Designed & built with ❤️ for Android.
 </div>
