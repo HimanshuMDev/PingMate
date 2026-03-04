@@ -1,33 +1,37 @@
-<div align="center">
+<p>
+  <img src="app/src/main/ic_launcher-playstore.png" width="140" alt="PingMate Logo">
+</p>
 
-<img src="app/src/main/ic_launcher-playstore.png" alt="PingMate Logo" width="160" />
+<h1>PingMate ⚡</h1>
 
-# ⚡ PingMate
+<p>
+  Notifications today are overwhelming. Important messages get buried under constant alerts, breaking your focus throughout the day.
 
-**Your Intelligent, Privacy-First Notification Hub**
+<strong>PingMate brings structure to the chaos.</strong>
 
-[![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org)
-[![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?style=for-the-badge&logo=jetpackcompose)](https://developer.android.com/jetpack/compose)
-[![Android](https://img.shields.io/badge/Android-10%2B-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com)
-[![License](https://img.shields.io/badge/License-MIT-lightgrey?style=for-the-badge)]()
-[![Build](https://img.shields.io/badge/Build-Passing-brightgreen?style=for-the-badge)]()
+It intelligently collects, filters, groups, and summarizes notifications into a clean, unified feed — helping you focus only on what truly matters.
 
-_One unified feed. AI-powered summaries. Smart reminders. Zero accounts required._ <br>
-_Reclaim your focus by letting PingMate handle the notification noise through the power of on-device ML and Gemini AI._
+Built entirely with modern Android technologies, PingMate processes notifications securely using on-device Machine Learning, with optional Gemini AI integration for enhanced summaries.
 
-**📥 [Download APK](https://github.com/your-username/PingMate/releases)** — Get the app and install on your Android device.
+</p>
 
-[Key Features](#-key-features) • [Screenshots](#-screenshots) • [How to Use](#-how-to-use-the-app) • [Developer Setup](#-getting-started-for-developers)
-
-</div>
-
----
-
-## 🌟 Why PingMate?
-
-Notifications today are overwhelming. **PingMate** reclaims your focus by acting as an intelligent intermediary between your apps and your attention. Built purely with modern Android technologies, PingMate ingests, filters, and summarizes your alerts securely using on-device Machine Learning and optional Gemini AI integrations. 
-
-Whether you are a busy professional trying to declutter your status bar, or a developer looking to explore cutting-edge Android architecture, PingMate provides a seamless, beautiful, and highly customizable experience. You'll never miss what matters while muting the noise.
+<p>
+  <a href="https://kotlinlang.org">
+    <img src="https://img.shields.io/badge/Kotlin-2.0.21-7F52FF.svg" alt="Kotlin 2.0.21">
+  </a>
+  <a href="https://developer.android.com/jetpack/compose">
+    <img src="https://img.shields.io/badge/UI-Jetpack%20Compose-blue.svg" alt="Jetpack Compose">
+  </a>
+  <a href="https://developer.android.com">
+    <img src="https://img.shields.io/badge/Android-10%2B-3DDC84.svg" alt="Android 10+">
+  </a>
+  <a href="#">
+    <img src="https://img.shields.io/badge/License-MIT-lightgrey.svg" alt="MIT License">
+  </a>
+  <a href="https://github.com/your-username/PingMate/releases">
+    <img src="https://img.shields.io/badge/Build-Passing-brightgreen.svg" alt="Build Passing">
+  </a>
+</p>
 
 ---
 
@@ -123,6 +127,13 @@ A clear, step-by-step guide from first launch to every main action in the app.
 *Open Settings from the **gear icon** in the Home top bar.*
 
 ---
+## 📥 Download
+
+Get the latest APK from the releases page:
+
+[Download APK](https://drive.google.com/file/d/1c-CVaWi_G2wuR3qxgvyLBgFuSWi_U9nY/view?usp=sharing)
+
+---
 
 ## 🛠️ Tech Stack & Architecture
 
@@ -143,28 +154,28 @@ PingMate leverages modern Android development paradigms to ensure a robust, main
 Full flow as in the app: onboarding, then from Home you reach Assistant screen, Assistant result, Settings, and Reminder dialog.
 
 ```
-┌─────────────┐     ┌──────────────────────┐     ┌───────────────┐     ┌─────────────┐
-│   Welcome   │ ──► │ Notification Access  │ ──► │  Choose Apps  │ ──► │    Home     │
-│ Get Started │     │ (system settings)    │     │ (tracked apps) │     │ (main feed) │
-└─────────────┘     └──────────────────────┘     └───────────────┘     └──────┬──────┘
-                                                                               │
+┌─────────────┐     ┌──────────────────────┐     ┌───────────────┐     ┌────────────┐
+│   Welcome   │ ──► │ Notification Access  │ ──► │  Choose Apps  │ ──► │    Home    │
+│ Get Started │     │ (system settings)    │     │ (tracked apps) │    │ (main feed)│
+└─────────────┘     └──────────────────────┘     └───────────────┘     └─────┬──────┘
+                                                                             │
          ┌──────────────────────────────────────────┬────────────────────────┼────────────────────────┐
          │                                          │                        │                        │
          ▼                                          ▼                        ▼                        ▼
-┌─────────────────┐                    ┌─────────────────────┐   ┌──────────────┐         ┌─────────────────┐
-│    Settings     │                    │  Voice AI Assistant   │   │ Notification │         │  Home Widget    │
-│ (gear on Home)  │                    │  (FAB on Home)       │   │    Detail    │         │ (tap → same     │
-│                 │                    │         │            │   │    Sheet     │         │  as FAB)        │
-│ • Gemini API    │                    │         ▼            │   │       │      │         └─────────────────┘
-│ • Choose apps   │                    │  Assistant Screen    │   │       │      │
-│ • Exclude from  │                    │  (listening →       │   │       ▼      │
-│   AI            │                    │   speak command)     │   │ Set Reminder  │
-│ • Clear messages│                    │         │            │   │   Dialog      │
-└─────────────────┘                    │         ▼            │   │ (date & time  │
-                                       │  Result card on      │   │  + note)      │
+┌─────────────────┐                    ┌─────────────────────┐    ┌─────────────────┐         ┌─────────────────┐
+│    Settings     │                    │  Voice AI Assistant  │   │  Notification   │         │  Home Widget    │
+│ (gear on Home)  │                    │  (FAB on Home)       │   │    Detail       │         │ (tap → same     │
+│                 │                    │         │            │   │    Sheet        │         │  as FAB)        │
+│ • Gemini API    │                    │         ▼            │   │       │         │         └─────────────────┘
+│ • Choose apps   │                    │  Assistant Screen    │   │       │         │
+│ • Exclude from  │                    │  (listening →        │   │       ▼         │
+│   AI            │                    │   speak command)     │   │ Set Reminder    │
+│ • Clear messages│                    │         │            │   │   Dialog        │
+└─────────────────┘                    │         ▼            │   │ (date & time    │
+                                       │  Result card on      │   │  + note)        │
                                        │  same Assistant      │   └─────────────────┘
                                        │  screen              │
-                                       └─────────────────────┘
+                                       └──────────────────────┘
 ```
 
 | From | You can open |
@@ -196,7 +207,7 @@ Full flow as in the app: onboarding, then from Home you reach Assistant screen, 
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/your-username/PingMate.git
+   git clone https://github.com/HimanshuMDev/PingMate
    cd PingMate
    ```
 2. **Open the project in Android Studio** and allow Gradle to sync.
@@ -245,14 +256,3 @@ We welcome contributions to make PingMate even better!
 5. Open a Pull Request
 
 ---
-
-## 📄 License
-
-Distributed under the **MIT License**. Please see `LICENSE` for more information.
-
----
-
-<div align="center">
-  <b>PingMate</b> — Notifications, un-cluttered. <br>
-  Designed & built with ❤️ for Android.
-</div>
