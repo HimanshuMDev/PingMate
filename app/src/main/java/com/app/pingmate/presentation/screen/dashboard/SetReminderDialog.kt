@@ -65,6 +65,7 @@ fun SetReminderDialog(
     )
 
     var showDateTimePicker by remember { mutableStateOf(false) }
+    var isSelectingTime by remember { mutableStateOf(false) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -172,7 +173,10 @@ fun SetReminderDialog(
                 val dateStr = SimpleDateFormat("d MMM yyyy", Locale.getDefault()).format(Date(selectedDateMillis))
                 val dateTimeLine = "$dateStr   $hour:$minute $amPm"
                 Surface(
-                    onClick = { showDateTimePicker = true },
+                    onClick = { 
+                        isSelectingTime = false
+                        showDateTimePicker = true 
+                    },
                     color = Color(0xFF1E1E2C),
                     shape = RoundedCornerShape(16.dp),
                     border = BorderStroke(1.dp, Color(0xFF2C2C3E)),
@@ -269,48 +273,65 @@ fun SetReminderDialog(
                 color = Color(0xFF161622),
                 modifier = Modifier
                     .fillMaxWidth(0.95f)
-                    .heightIn(max = 560.dp)
+                    .wrapContentHeight() // Wrap height to content
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .verticalScroll(scrollState)
-                        .padding(20.dp),
+                        .padding(20.dp), // Removed vertical scroll since it fits now
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("Select date & time", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    DatePicker(state = datePickerState)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    TimePicker(
-                        state = timePickerState,
-                        colors = TimePickerDefaults.colors(
-                            clockDialColor = Color(0xFF1E1E2C),
-                            clockDialSelectedContentColor = Color.White,
-                            clockDialUnselectedContentColor = Color.White.copy(alpha = 0.5f),
-                            selectorColor = NotiBlue,
-                            periodSelectorSelectedContainerColor = NotiBlue,
-                            periodSelectorUnselectedContainerColor = Color(0xFF1E1E2C),
-                            periodSelectorSelectedContentColor = Color.White,
-                            periodSelectorUnselectedContentColor = Color.White.copy(alpha = 0.5f),
-                            timeSelectorSelectedContainerColor = NotiBlue.copy(alpha = 0.2f),
-                            timeSelectorUnselectedContainerColor = Color(0xFF1E1E2C),
-                            timeSelectorSelectedContentColor = NotiBlue,
-                            timeSelectorUnselectedContentColor = Color.White
+                    if (!isSelectingTime) {
+                        // STEP 1: DATE PICKER
+                        Text("Select Date", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        DatePicker(state = datePickerState)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(onClick = { showDateTimePicker = false }) { Text("Cancel", color = TextMuted) }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            TextButton(onClick = { 
+                                datePickerState.selectedDateMillis?.let { selectedDateMillis = it }
+                                isSelectingTime = true // Switch to time picker
+                            }) { Text("Next", color = NotiBlue, fontWeight = FontWeight.Bold) }
+                        }
+                    } else {
+                        // STEP 2: TIME PICKER
+                        Text("Select Time", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(24.dp))
+                        TimePicker(
+                            state = timePickerState,
+                            colors = TimePickerDefaults.colors(
+                                clockDialColor = Color(0xFF1E1E2C),
+                                clockDialSelectedContentColor = Color.White,
+                                clockDialUnselectedContentColor = Color.White.copy(alpha = 0.5f),
+                                selectorColor = NotiBlue,
+                                periodSelectorSelectedContainerColor = NotiBlue,
+                                periodSelectorUnselectedContainerColor = Color(0xFF1E1E2C),
+                                periodSelectorSelectedContentColor = Color.White,
+                                periodSelectorUnselectedContentColor = Color.White.copy(alpha = 0.5f),
+                                timeSelectorSelectedContainerColor = NotiBlue.copy(alpha = 0.2f),
+                                timeSelectorUnselectedContainerColor = Color(0xFF1E1E2C),
+                                timeSelectorSelectedContentColor = NotiBlue,
+                                timeSelectorUnselectedContentColor = Color.White
+                            )
                         )
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TextButton(onClick = { showDateTimePicker = false }) { Text("Cancel", color = TextMuted) }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        TextButton(onClick = {
-                            datePickerState.selectedDateMillis?.let { selectedDateMillis = it }
-                            showDateTimePicker = false
-                        }) { Text("OK", color = NotiBlue, fontWeight = FontWeight.Bold) }
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(onClick = { isSelectingTime = false }) { Text("Back", color = TextMuted) }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            TextButton(onClick = {
+                                showDateTimePicker = false
+                            }) { Text("OK", color = NotiBlue, fontWeight = FontWeight.Bold) }
+                        }
                     }
                 }
             }
@@ -366,6 +387,7 @@ fun SetGeneralReminderDialog(
     )
 
     var showDateTimePicker by remember { mutableStateOf(false) }
+    var isSelectingTime by remember { mutableStateOf(false) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -433,7 +455,10 @@ fun SetGeneralReminderDialog(
                 val dateStr = SimpleDateFormat("d MMM yyyy", Locale.getDefault()).format(Date(selectedDateMillis))
                 val dateTimeLine = "$dateStr   $hour:$minute $amPm"
                 Surface(
-                    onClick = { showDateTimePicker = true },
+                    onClick = { 
+                        isSelectingTime = false
+                        showDateTimePicker = true 
+                    },
                     color = Color(0xFF1E1E2C),
                     shape = RoundedCornerShape(16.dp),
                     border = BorderStroke(1.dp, Color(0xFF2C2C3E)),
@@ -530,48 +555,65 @@ fun SetGeneralReminderDialog(
                 color = Color(0xFF161622),
                 modifier = Modifier
                     .fillMaxWidth(0.95f)
-                    .heightIn(max = 560.dp)
+                    .wrapContentHeight()
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .verticalScroll(scrollState)
                         .padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("Select date & time", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    DatePicker(state = datePickerState)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    TimePicker(
-                        state = timePickerState,
-                        colors = TimePickerDefaults.colors(
-                            clockDialColor = Color(0xFF1E1E2C),
-                            clockDialSelectedContentColor = Color.White,
-                            clockDialUnselectedContentColor = Color.White.copy(alpha = 0.5f),
-                            selectorColor = NotiBlue,
-                            periodSelectorSelectedContainerColor = NotiBlue,
-                            periodSelectorUnselectedContainerColor = Color(0xFF1E1E2C),
-                            periodSelectorSelectedContentColor = Color.White,
-                            periodSelectorUnselectedContentColor = Color.White.copy(alpha = 0.5f),
-                            timeSelectorSelectedContainerColor = NotiBlue.copy(alpha = 0.2f),
-                            timeSelectorUnselectedContainerColor = Color(0xFF1E1E2C),
-                            timeSelectorSelectedContentColor = NotiBlue,
-                            timeSelectorUnselectedContentColor = Color.White
+                    if (!isSelectingTime) {
+                        // STEP 1: DATE PICKER
+                        Text("Select Date", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        DatePicker(state = datePickerState)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(onClick = { showDateTimePicker = false }) { Text("Cancel", color = TextMuted) }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            TextButton(onClick = { 
+                                datePickerState.selectedDateMillis?.let { selectedDateMillis = it }
+                                isSelectingTime = true // Switch to time picker
+                            }) { Text("Next", color = NotiBlue, fontWeight = FontWeight.Bold) }
+                        }
+                    } else {
+                        // STEP 2: TIME PICKER
+                        Text("Select Time", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(24.dp))
+                        TimePicker(
+                            state = timePickerState,
+                            colors = TimePickerDefaults.colors(
+                                clockDialColor = Color(0xFF1E1E2C),
+                                clockDialSelectedContentColor = Color.White,
+                                clockDialUnselectedContentColor = Color.White.copy(alpha = 0.5f),
+                                selectorColor = NotiBlue,
+                                periodSelectorSelectedContainerColor = NotiBlue,
+                                periodSelectorUnselectedContainerColor = Color(0xFF1E1E2C),
+                                periodSelectorSelectedContentColor = Color.White,
+                                periodSelectorUnselectedContentColor = Color.White.copy(alpha = 0.5f),
+                                timeSelectorSelectedContainerColor = NotiBlue.copy(alpha = 0.2f),
+                                timeSelectorUnselectedContainerColor = Color(0xFF1E1E2C),
+                                timeSelectorSelectedContentColor = NotiBlue,
+                                timeSelectorUnselectedContentColor = Color.White
+                            )
                         )
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TextButton(onClick = { showDateTimePicker = false }) { Text("Cancel", color = TextMuted) }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        TextButton(onClick = {
-                            datePickerState.selectedDateMillis?.let { selectedDateMillis = it }
-                            showDateTimePicker = false
-                        }) { Text("OK", color = NotiBlue, fontWeight = FontWeight.Bold) }
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(onClick = { isSelectingTime = false }) { Text("Back", color = TextMuted) }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            TextButton(onClick = {
+                                showDateTimePicker = false
+                            }) { Text("OK", color = NotiBlue, fontWeight = FontWeight.Bold) }
+                        }
                     }
                 }
             }

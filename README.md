@@ -131,7 +131,7 @@ A clear, step-by-step guide from first launch to every main action in the app.
 
 Get the latest APK from the releases page:
 
-[Download APK](https://drive.google.com/file/d/1c-CVaWi_G2wuR3qxgvyLBgFuSWi_U9nY/view?usp=sharing)
+[Download APK](https://drive.google.com/file/d/1ad0-Pj4ll8ooomcXtg1UF9AWgdPBw3Mr/view?usp=sharing)
 
 ---
 

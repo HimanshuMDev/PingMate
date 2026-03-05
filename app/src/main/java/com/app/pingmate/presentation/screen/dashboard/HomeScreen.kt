@@ -1090,18 +1090,7 @@ fun RemindersListContent(
                 }
             }
         }
-        // Decode big picture (e.g. notification content image / BigPictureStyle)
-        val bigPictureBitmap = remember(notification.bigPictureBase64) {
-            notification.bigPictureBase64?.let { b64 ->
-                try {
-                    val bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
-                    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                        ?.asImageBitmap()
-                } catch (e: Exception) {
-                    null
-                }
-            }
-        }
+
 
         val appIcon = remember(notification.packageName) {
             try {
@@ -1121,8 +1110,8 @@ fun RemindersListContent(
 
         val contentMaxLines = if (compact) 2 else 20
         // Only show content image when we don't have a profile – avoid showing profile again in message content
-        val showBigPictureInCard = !compact && bigPictureBitmap != null && largeIconBitmap == null
-        val showBigPictureThumbInCompact = compact && bigPictureBitmap != null && largeIconBitmap == null
+        val showBigPictureInCard = false
+        val showBigPictureThumbInCompact = false
         val isFav = notification.isFavorite
         // Same card style as Choose App screen: unified premium look
         val cardBg = if (isFav) Color(0xFF10182A) else Color(0xFF0E0E1A)
@@ -1274,19 +1263,7 @@ fun RemindersListContent(
                             overflow = TextOverflow.Ellipsis
                         )
 
-                        if (showBigPictureThumbInCompact) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Image(
-                                bitmap = bigPictureBitmap!!,
-                                contentDescription = null,
-                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                                modifier = Modifier
-                                    .heightIn(max = 72.dp)
-                                    .width(72.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Color(0xFF121218))
-                            )
-                        }
+
 
                         Spacer(modifier = Modifier.height(if (compact) 8.dp else 10.dp))
 
@@ -1351,26 +1328,7 @@ fun RemindersListContent(
                     }
                 }
 
-                if (showBigPictureInCard) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp)
-                            .padding(bottom = 14.dp)
-                    ) {
-                        Image(
-                            bitmap = bigPictureBitmap,
-                            contentDescription = null,
-                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 200.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFF121218))
-                        )
-                    }
-                }
+
             }
         }
     }
@@ -1407,17 +1365,7 @@ fun RemindersListContent(
                 }
             }
         }
-        val bigPictureBitmap = remember(notification.bigPictureBase64) {
-            notification.bigPictureBase64?.let { b64 ->
-                try {
-                    val bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
-                    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                        ?.asImageBitmap()
-                } catch (e: Exception) {
-                    null
-                }
-            }
-        }
+
         val appIcon = remember(notification.packageName) {
             try {
                 ctx.packageManager.getApplicationIcon(notification.packageName)
@@ -1522,21 +1470,7 @@ fun RemindersListContent(
                 lineHeight = 22.sp
             )
 
-            if (bigPictureBitmap != null && largeIconBitmap == null) {
-                Spacer(modifier = Modifier.height(16.dp))
-                Image(
-                    bitmap = bigPictureBitmap,
-                    contentDescription = null,
-                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 260.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF121218))
-                )
-            }
 
-            Spacer(modifier = Modifier.height(24.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),

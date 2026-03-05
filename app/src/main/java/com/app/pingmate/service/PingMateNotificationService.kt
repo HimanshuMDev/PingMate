@@ -57,9 +57,24 @@ class PingMateNotificationService : NotificationListenerService() {
         Log.d("PingMateService", "Notification Listener Created")
     }
 
+    override fun onStartCommand(intent: android.content.Intent?, flags: Int, startId: Int): Int {
+        super.onStartCommand(intent, flags, startId)
+        // Ensure that the OS tries to restart the service if there is enough memory
+        return android.app.Service.START_STICKY
+    }
+
     override fun onDestroy() {
         instance = null
         super.onDestroy()
+    }
+
+    override fun onListenerDisconnected() {
+        super.onListenerDisconnected()
+        Log.d("PingMateService", "Notification Listener Disconnected")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            // Attempt to rebind if the system drops the connection
+            requestRebind(android.content.ComponentName(this, PingMateNotificationService::class.java))
+        }
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
@@ -163,46 +178,19 @@ class PingMateNotificationService : NotificationListenerService() {
                     null
                 }
 
-                // Extract big picture (WhatsApp/email message images, BigPictureStyle, etc.)
-                val bigPictureBase64: String? = try {
-                    var picture: Bitmap? = null
-                    // Try all known keys (different OEMs/versions use different keys)
-                    @Suppress("DEPRECATION")
-                    picture = extras.get(android.app.Notification.EXTRA_PICTURE) as? Bitmap
-                        ?: extras.get("android.bigPicture") as? Bitmap
-                        ?: extras.get("android.picture") as? Bitmap
-                        ?: extras.getParcelable(android.app.Notification.EXTRA_PICTURE) as? Bitmap
-                        ?: extras.getParcelable("android.bigPicture") as? Bitmap
-                    if (picture == null && Build.VERSION.SDK_INT >= 33) {
-                        picture = extras.getParcelable(android.app.Notification.EXTRA_PICTURE, Bitmap::class.java)
-                            ?: extras.getParcelable("android.bigPicture", Bitmap::class.java)
-                            ?: extras.getParcelable("android.picture", Bitmap::class.java)
-                    }
-                    // Do NOT use the profile/large icon as the content image – profile stays only in the avatar area
-                    picture?.let { bmp ->
-                        val stream = java.io.ByteArrayOutputStream()
-                        bmp.compress(Bitmap.CompressFormat.PNG, 90, stream)
-                        android.util.Base64.encodeToString(stream.toByteArray(), android.util.Base64.NO_WRAP)
-                    }
-                } catch (e: Exception) {
-                    Log.w("PingMateService", "Could not extract big picture: ${e.message}", e)
-                    null
-                }
+                // Removing big picture extraction to save memory and avoid storing large images
+                val bigPictureBase64: String? = null
 
                 serviceScope.launch {
-                    // Prefer lookup by notificationKey to avoid saving the same system notification twice
-                    var existing = if (!notificationKey.isNullOrBlank()) {
-                        db.notificationDao.getByNotificationKey(notificationKey)
-                    } else null
-                    if (existing == null) {
-                        existing = db.notificationDao.getRecentNotification(packageName, title, text)
-                    }
+                    // Only match on exact text content to prevent overwriting consecutive messages in a chat
+                    val existing = db.notificationDao.getRecentNotification(packageName, title, text)
                     if (existing != null) {
                         val updated = existing.copy(
+                            title = title,
+                            content = text,
                             timestamp = postTime,
                             notificationKey = notificationKey,
-                            largeIconBase64 = largeIconBase64 ?: existing.largeIconBase64,
-                            bigPictureBase64 = bigPictureBase64 ?: existing.bigPictureBase64
+                            largeIconBase64 = largeIconBase64 ?: existing.largeIconBase64
                         )
                         db.notificationDao.updateNotification(updated)
                         contentIntent?.let { NotificationIntentCache.put(updated.id, it) }
@@ -214,8 +202,7 @@ class PingMateNotificationService : NotificationListenerService() {
                             timestamp = postTime,
                             isFavorite = false,
                             notificationKey = notificationKey,
-                            largeIconBase64 = largeIconBase64,
-                            bigPictureBase64 = bigPictureBase64
+                            largeIconBase64 = largeIconBase64
                         )
                         val insertedId = db.notificationDao.insertNotification(entity).toInt()
                         contentIntent?.let { NotificationIntentCache.put(insertedId, it) }
