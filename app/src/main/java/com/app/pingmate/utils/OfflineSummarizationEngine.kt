@@ -68,7 +68,7 @@ class OfflineSummarizationEngine(
         /** Max notifications in one request so payload stays lean and response is not truncated. */
         private const val MAX_MESSAGES_SAFETY = 80
         /** Allow longer AI response so it can process and summarize fully (not "too low"). */
-        private const val MAX_OUTPUT_TOKENS = 1024
+        private const val MAX_OUTPUT_TOKENS = 4096
         private const val CONNECT_TIMEOUT_MS = 35_000
         private const val READ_TIMEOUT_MS = 90_000
         private const val MAX_RETRIES = 2

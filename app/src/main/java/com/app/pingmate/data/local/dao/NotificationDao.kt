@@ -46,8 +46,6 @@ interface NotificationDao {
     @Query("SELECT * FROM notifications WHERE (title LIKE '%' || :searchQuery || '%' OR content LIKE '%' || :searchQuery || '%') AND (:pkgName IS NULL OR packageName = :pkgName) AND (:isFavorite IS NULL OR isFavorite = :isFavorite) ORDER BY timestamp DESC")
     fun searchNotificationsPaged(searchQuery: String, pkgName: String?, isFavorite: Boolean? = null): androidx.paging.PagingSource<Int, NotificationEntity>
 
-    @Query("SELECT * FROM notifications WHERE packageName = :pkgName AND title = :title AND content = :content ORDER BY timestamp DESC LIMIT 1")
-    suspend fun getRecentNotification(pkgName: String, title: String, content: String): NotificationEntity?
 
     @Query("SELECT * FROM notifications WHERE notificationKey = :notificationKey LIMIT 1")
     suspend fun getByNotificationKey(notificationKey: String): NotificationEntity?
@@ -74,9 +72,6 @@ interface NotificationDao {
     @Query("DELETE FROM notifications WHERE id = :id")
     suspend fun deleteNotification(id: Int)
 
-    // Auto-clear logic: delete anything older than X milliseconds
-    @Query("DELETE FROM notifications WHERE timestamp < :cutoffTime")
-    suspend fun deleteOlderThan(cutoffTime: Long)
     
     @Query("DELETE FROM notifications")
     suspend fun clearAll()

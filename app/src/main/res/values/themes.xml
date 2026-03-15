@@ -12,13 +12,15 @@
         <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
         <item name="postSplashScreenTheme">@style/Theme.PingMate</item>
     </style>
-    <!-- Transparent overlay theme for widget activity; smooth fade in/out -->
     <style name="Theme.PingMate.Transparent" parent="Theme.PingMate">
         <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowIsFloating">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowContentOverlay">@null</item>
         <item name="android:windowNoTitle">true</item>
-        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:backgroundDimAmount">0.5</item>
         <item name="android:windowAnimationStyle">@style/WidgetActivityAnimation</item>
+        <item name="android:windowCloseOnTouchOutside">true</item>
     </style>
 </resources>

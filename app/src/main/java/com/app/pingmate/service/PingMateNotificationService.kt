@@ -182,31 +182,17 @@ class PingMateNotificationService : NotificationListenerService() {
                 val bigPictureBase64: String? = null
 
                 serviceScope.launch {
-                    // Only match on exact text content to prevent overwriting consecutive messages in a chat
-                    val existing = db.notificationDao.getRecentNotification(packageName, title, text)
-                    if (existing != null) {
-                        val updated = existing.copy(
-                            title = title,
-                            content = text,
-                            timestamp = postTime,
-                            notificationKey = notificationKey,
-                            largeIconBase64 = largeIconBase64 ?: existing.largeIconBase64
-                        )
-                        db.notificationDao.updateNotification(updated)
-                        contentIntent?.let { NotificationIntentCache.put(updated.id, it) }
-                    } else {
-                        val entity = NotificationEntity(
-                            packageName = packageName,
-                            title = title,
-                            content = text,
-                            timestamp = postTime,
-                            isFavorite = false,
-                            notificationKey = notificationKey,
-                            largeIconBase64 = largeIconBase64
-                        )
-                        val insertedId = db.notificationDao.insertNotification(entity).toInt()
-                        contentIntent?.let { NotificationIntentCache.put(insertedId, it) }
-                    }
+                    val entity = NotificationEntity(
+                        packageName = packageName,
+                        title = title,
+                        content = text,
+                        timestamp = postTime,
+                        isFavorite = false,
+                        notificationKey = notificationKey,
+                        largeIconBase64 = largeIconBase64
+                    )
+                    val insertedId = db.notificationDao.insertNotification(entity).toInt()
+                    contentIntent?.let { NotificationIntentCache.put(insertedId, it) }
                 }
 
             } else {
@@ -218,7 +204,7 @@ class PingMateNotificationService : NotificationListenerService() {
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
         super.onNotificationRemoved(sbn)
         // We will keep notifications in our DB even if user clears them from the notification panel.
-        // The DB is acting as an archive/feed that only auto-clears after 24 hrs.
+        // The DB is acting as an archive/feed.
     }
 
     /**

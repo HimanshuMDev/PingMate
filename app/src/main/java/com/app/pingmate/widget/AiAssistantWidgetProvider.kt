@@ -22,8 +22,11 @@ class AiAssistantWidgetProvider : AppWidgetProvider() {
 
             // Launch AI overlay in its own task; exclude from recents so closing it doesn't leave app in recents
             val intent = Intent(context, AiWidgetActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                    Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS or Intent.FLAG_ACTIVITY_NO_HISTORY)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or 
+                    Intent.FLAG_ACTIVITY_CLEAR_TASK or
+                    Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS or 
+                    Intent.FLAG_ACTIVITY_NO_HISTORY or
+                    Intent.FLAG_ACTIVITY_NO_ANIMATION)
             }
             val pendingIntent = PendingIntent.getActivity(
                 context, appWidgetId, intent,
